@@ -1,0 +1,6 @@
+{
+  "name": "Event Ease ",
+  "description": "College event registration and check-in system with live QR scanner and digital passes.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

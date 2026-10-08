@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Manrope', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  --color-ink: #0E1424;
+  --color-slate: #5B6478;
+  --color-mist: #F4F6FA;
+  --color-surface: #FFFFFF;
+  --color-line: #E1E5EE;
+  
+  --color-brand: #3345E8;
+  --color-brand-hover: #2735C4;
+  --color-brand-tint: #E8EBFE;
+
+  --color-success: #12805C;
+  --color-success-bg: #DDF5EA;
+
+  --color-warning: #B25E00;
+  --color-warning-bg: #FFEBCB;
+
+  --color-danger: #C0302F;
+  --color-danger-bg: #FCE1E1;
+
+  --shadow-soft: 0 8px 24px rgba(14, 20, 36, 0.08);
+}
+
+:root {
+  font-family: 'Manrope', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+body {
+  font-family: 'Manrope', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: #F4F6FA;
+  color: #0E1424;
+}
+
+.safe-area-pb {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+/* Prevent unwanted mobile horizontal panning */
+html, body {
+  overflow-x: hidden;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Perforated ticket notches */
+.ticket-notch-left {
+  position: absolute;
+  top: 50%;
+  left: -12px;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  background-color: #F4F6FA;
+  border-radius: 9999px;
+  box-shadow: inset -1px 0 0 #E1E5EE;
+}
+
+.ticket-notch-right {
+  position: absolute;
+  top: 50%;
+  right: -12px;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  background-color: #F4F6FA;
+  border-radius: 9999px;
+  box-shadow: inset 1px 0 0 #E1E5EE;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
