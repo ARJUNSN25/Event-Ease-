@@ -116,33 +116,33 @@ export function ShareModal({
   return (
     <div className="fixed inset-0 z-50 bg-[#0E1424]/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fadeIn">
       <div
-        className="w-full max-w-md bg-white rounded-[24px] border border-[#E1E5EE] shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
+        className="w-full max-w-md bg-white rounded-[24px] border border-slate-200/90 shadow-[0_20px_60px_rgba(0,0,0,0.12)] overflow-hidden flex flex-col max-h-[92vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="bg-[#0E1424] text-white p-5 sm:p-6 relative">
+        {/* Modern Light Header */}
+        <div className="bg-slate-50 border-b border-slate-200/90 text-slate-900 p-5 sm:p-6 relative">
           <button
             type="button"
             onClick={onClose}
-            className="absolute right-4 top-4 text-white/70 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
+            className="absolute right-4 top-4 text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-200/60 transition-colors cursor-pointer"
             aria-label="Close"
           >
             <X className="w-5 h-5" />
           </button>
 
           <div className="flex items-center gap-2 mb-2">
-            <span className="p-1.5 rounded-full bg-[#3345E8] text-white">
+            <span className="p-1.5 rounded-full bg-[#3345E8] text-white shadow-xs">
               <Share2 className="w-4 h-4" />
             </span>
-            <span className="text-[11px] font-extrabold uppercase tracking-widest text-indigo-300">
+            <span className="text-[11px] font-extrabold uppercase tracking-widest text-[#3345E8]">
               {isPassShare ? 'Share Verified Entry Pass' : 'Share Campus Event'}
             </span>
           </div>
 
-          <h3 className="text-lg sm:text-xl font-black text-white leading-tight">
+          <h3 className="text-lg sm:text-xl font-extrabold text-slate-950 leading-tight">
             {event.name}
           </h3>
-          <p className="text-xs text-white/70 mt-1">
+          <p className="text-xs text-slate-600 mt-1">
             {isPassShare
               ? `Share your digital pass (Code: ${studentPassCode}) with friends or organizers.`
               : 'Invite friends, classmates, and attendees across your favorite channels.'}

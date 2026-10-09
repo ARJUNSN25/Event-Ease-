@@ -12,8 +12,10 @@ import {
   getStats,
   register,
   subscribeToStore,
+  getAttendeeProfile,
 } from '../store';
 import { useToast } from './Toast';
+import { EventBannerImage } from './EventBannerImage';
 import {
   Ticket,
   ChevronDown,
@@ -52,6 +54,7 @@ interface RegisterViewProps {
   onSelectEventId: (id: string) => void;
   onNavigateToOrganizer: () => void;
   onNavigateToEvents?: () => void;
+  onNavigateToRegistrations?: () => void;
   initialEmail?: string;
 }
 
@@ -98,9 +101,11 @@ export function RegisterView({
   onSelectEventId,
   onNavigateToOrganizer,
   onNavigateToEvents,
+  onNavigateToRegistrations,
   initialEmail,
 }: RegisterViewProps) {
   const { showToast } = useToast();
+  const profile = getAttendeeProfile();
 
   const [events, setEvents] = useState<Event[]>([]);
   const [stats, setStats] = useState<EventStats>({ registered: 0, attended: 0, remaining: 0, capacity: 0 });
@@ -109,12 +114,12 @@ export function RegisterView({
   const [mobileTab, setMobileTab] = useState<'form' | 'details' | 'pass'>('form');
 
   // Registration form inputs
-  const [nameInput, setNameInput] = useState('');
-  const [emailInput, setEmailInput] = useState(() => initialEmail || '');
-  const [phoneInput, setPhoneInput] = useState('');
-  const [collegeNameInput, setCollegeNameInput] = useState('Marwadi University');
-  const [branchInput, setBranchInput] = useState(COMMON_BRANCHES[0]);
-  const [specializationInput, setSpecializationInput] = useState(COMMON_SPECIALIZATIONS[0]);
+  const [nameInput, setNameInput] = useState(() => profile?.name || '');
+  const [emailInput, setEmailInput] = useState(() => initialEmail || profile?.email || '');
+  const [phoneInput, setPhoneInput] = useState(() => profile?.phone || '');
+  const [collegeNameInput, setCollegeNameInput] = useState(() => profile?.collegeName || 'Marwadi University');
+  const [branchInput, setBranchInput] = useState(() => profile?.branch || COMMON_BRANCHES[0]);
+  const [specializationInput, setSpecializationInput] = useState(() => profile?.specialization || COMMON_SPECIALIZATIONS[0]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -373,21 +378,21 @@ export function RegisterView({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-8 items-start">
         {/* Left Column: Registration Form (7 cols on lg) */}
         <div
-          className={`lg:col-span-7 bg-white rounded-[20px] border border-[#E1E5EE] shadow-[0_4px_20px_rgba(14,20,36,0.04)] p-4 sm:p-7 space-y-5 ${
+          className={`lg:col-span-7 bg-white rounded-[22px] border border-slate-200/90 shadow-[0_4px_24px_rgba(0,0,0,0.03)] p-4 sm:p-7 space-y-5 ${
             mobileTab === 'details' && !successResult ? 'hidden lg:block' : ''
           } ${mobileTab === 'pass' && successResult ? 'hidden lg:block' : ''}`}
         >
-          <div className="flex items-center justify-between gap-2 pb-3 border-b border-[#E1E5EE]">
+          <div className="flex items-center justify-between gap-2 pb-3 border-b border-slate-100">
             <div>
-              <h2 className="text-base sm:text-lg md:text-xl font-bold text-[#0E1424] flex items-center gap-2">
+              <h2 className="text-base sm:text-lg md:text-xl font-bold text-slate-900 flex items-center gap-2">
                 <User className="w-5 h-5 text-[#3345E8]" />
                 <span>Student Registration Form</span>
               </h2>
-              <p className="text-[11px] sm:text-xs text-[#5B6478] mt-0.5">
+              <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
                 Fill in your student information to reserve your seat and generate your pass.
               </p>
             </div>
-            <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#EBFBF4] text-[#12805C] border border-[#12805C]/20 shrink-0">
+            <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/80 shrink-0">
               Instant Pass
             </span>
           </div>
@@ -407,6 +412,15 @@ export function RegisterView({
                   >
                     View My Entry Pass &rarr;
                   </button>
+                  {onNavigateToRegistrations && (
+                    <button
+                      type="button"
+                      onClick={onNavigateToRegistrations}
+                      className="text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg shadow-2xs transition-colors cursor-pointer"
+                    >
+                      View in My Registrations &rarr;
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={handleRegisterAnother}
@@ -538,7 +552,7 @@ export function RegisterView({
 
               {/* Quick college suggestion chips */}
               <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                <span className="text-[11px] text-[#5B6478] font-medium mr-1">Quick pick:</span>
+                <span className="text-[11px] text-slate-500 font-medium mr-1">Quick pick:</span>
                 {SUGGESTED_COLLEGES.slice(0, 4).map((col) => (
                   <button
                     key={col}
@@ -546,8 +560,8 @@ export function RegisterView({
                     onClick={() => setCollegeNameInput(col)}
                     className={`text-[11px] px-2.5 py-1 rounded-full border transition-all cursor-pointer ${
                       collegeNameInput === col
-                        ? 'bg-[#3345E8] text-white border-[#3345E8]'
-                        : 'bg-[#F4F6FA] text-[#5B6478] hover:text-[#0E1424] border-[#E1E5EE]'
+                        ? 'bg-[#3345E8] text-white border-[#3345E8] shadow-2xs'
+                        : 'bg-slate-100 text-slate-600 hover:text-slate-900 border-slate-200/80 hover:bg-slate-200/70'
                     }`}
                   >
                     {col}
@@ -647,23 +661,14 @@ export function RegisterView({
             <div className="w-full max-w-[440px] bg-white rounded-[24px] border border-[#E1E5EE] shadow-[0_12px_36px_rgba(14,20,36,0.08)] overflow-hidden transition-all duration-300">
               {/* Event Header Banner */}
               <div className="relative p-5 sm:p-6 text-white rounded-t-[23px] overflow-hidden min-h-[140px] flex flex-col justify-end">
-                {currentEvent?.bannerUrl?.startsWith('linear-gradient') ? (
-                  <div
-                    className="absolute inset-0"
-                    style={{ background: currentEvent.bannerUrl }}
-                  />
-                ) : currentEvent?.bannerUrl ? (
-                  <img
-                    src={currentEvent.bannerUrl}
-                    alt={successResult.eventName}
-                    className="absolute inset-0 w-full h-full object-cover"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <div className="absolute inset-0 bg-[#3345E8]" />
-                )}
+                <EventBannerImage
+                  src={currentEvent?.bannerUrl}
+                  category={currentEvent?.category}
+                  alt={successResult.eventName}
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
                 {/* Contrast overlay */}
-                <div className="absolute inset-0 bg-gradient-to-t from-[#0E1424]/95 via-[#0E1424]/75 to-[#0E1424]/40" />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0E1424]/95 via-[#0E1424]/75 to-[#0E1424]/40 pointer-events-none" />
 
                 <div className="relative z-10 space-y-1">
                   <div className="flex items-center justify-between">
@@ -837,22 +842,13 @@ export function RegisterView({
                 <>
                   {/* Event Banner */}
                   <div className="relative h-40 sm:h-44 w-full overflow-hidden bg-[#0E1424]">
-                    {currentEvent.bannerUrl?.startsWith('linear-gradient') ? (
-                      <div
-                        className="absolute inset-0"
-                        style={{ background: currentEvent.bannerUrl }}
-                      />
-                    ) : currentEvent.bannerUrl ? (
-                      <img
-                        src={currentEvent.bannerUrl}
-                        alt={currentEvent.name}
-                        className="w-full h-full object-cover"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-[#3345E8]" />
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#0E1424]/90 via-[#0E1424]/40 to-transparent" />
+                    <EventBannerImage
+                      src={currentEvent.bannerUrl}
+                      category={currentEvent.category}
+                      alt={currentEvent.name}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#0E1424]/90 via-[#0E1424]/40 to-transparent pointer-events-none" />
 
                     <div className="absolute top-3 left-3 right-3 flex items-center justify-between">
                       {(() => {

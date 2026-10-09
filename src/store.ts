@@ -4,6 +4,25 @@
  */
 
 import QRCode from 'qrcode';
+import {
+  supabase,
+  fetchEventsFromSupabase,
+  saveEventToSupabase,
+  updateEventInSupabase,
+  deleteEventFromSupabase,
+  fetchRegistrationsFromSupabase,
+  saveRegistrationToSupabase,
+  updateRegistrationCheckInInSupabase,
+  cancelRegistrationInSupabase,
+  fetchFeedbackFromSupabase,
+  saveFeedbackToSupabase,
+} from './supabase';
+
+// Real bundled assets for production builds (Vercel, Vite, etc.)
+import techBanner from './assets/images/banner_tech_hackathon_1791431600955.jpg';
+import culturalBanner from './assets/images/banner_cultural_arts_1791431623296.jpg';
+import sportsBanner from './assets/images/banner_sports_meet_1791432284409.jpg';
+import academicBanner from './assets/images/banner_academic_summit_1791432297209.jpg';
 
 export type EventCategory = 'tech' | 'cultural' | 'sports' | 'academic' | 'arts' | 'general';
 export type EventStatus = 'upcoming' | 'ongoing' | 'completed';
@@ -96,6 +115,76 @@ const STORAGE_KEYS = {
   NEXT_EVENT_NUM: 'eventease_event_num_seq_v1',
   ORGANIZER_EMAIL: 'eventease_organizer_email_v1',
   FEEDBACK: 'eventease_feedback_v1',
+  ATTENDEE_PROFILE: 'eventease_attendee_profile_v1',
+};
+
+export interface AttendeeProfile {
+  name: string;
+  email: string;
+  phone?: string;
+  collegeName?: string;
+  branch?: string;
+  specialization?: string;
+}
+
+export function getAttendeeProfile(): AttendeeProfile | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.ATTENDEE_PROFILE);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+export function saveAttendeeProfile(profile: AttendeeProfile): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.ATTENDEE_PROFILE, JSON.stringify(profile));
+    notifyStoreChange();
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+export function listRegistrationsForUser(email?: string): Registration[] {
+  const all = loadRegistrations();
+  if (!email || !email.trim()) {
+    const profile = getAttendeeProfile();
+    if (profile?.email) {
+      const q = profile.email.toLowerCase().trim();
+      return all.filter((r) => r.email.toLowerCase() === q);
+    }
+    return [];
+  }
+  const q = email.toLowerCase().trim();
+  return all.filter((r) => r.email.toLowerCase() === q);
+}
+
+export function listAllRegistrations(): Registration[] {
+  return loadRegistrations();
+}
+
+export function cancelRegistration(rawCode: string): boolean {
+  const code = (rawCode || '').trim().toUpperCase();
+  if (!code) return false;
+  const allRegistrations = loadRegistrations();
+  const filtered = allRegistrations.filter((r) => r.code.toUpperCase() !== code);
+  if (filtered.length !== allRegistrations.length) {
+    saveRegistrations(filtered);
+    cancelRegistrationInSupabase(code).catch((e) =>
+      console.warn('Supabase cancelRegistration error:', e)
+    );
+    return true;
+  }
+  return false;
+}
+
+// High-availability CDN images (100% reliable across any host or deployment like Vercel)
+export const CDN_BANNERS = {
+  tech: 'https://images.unsplash.com/photo-1531482615713-2afd69097998?auto=format&fit=crop&w=1200&q=80',
+  cultural: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1200&q=80',
+  sports: 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=1200&q=80',
+  academic: 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=1200&q=80',
 };
 
 export const PRESET_BANNERS = [
@@ -103,41 +192,97 @@ export const PRESET_BANNERS = [
     id: 'tech',
     label: 'Tech & Hackathon',
     category: 'tech' as EventCategory,
-    url: '/src/assets/images/banner_tech_hackathon_1791431600955.jpg',
+    url: CDN_BANNERS.tech,
   },
   {
     id: 'cultural',
     label: 'Cultural & Arts',
     category: 'cultural' as EventCategory,
-    url: '/src/assets/images/banner_cultural_arts_1791431623296.jpg',
+    url: CDN_BANNERS.cultural,
   },
   {
     id: 'sports',
     label: 'Sports & Athletics',
     category: 'sports' as EventCategory,
-    url: '/src/assets/images/banner_sports_meet_1791432284409.jpg',
+    url: CDN_BANNERS.sports,
   },
   {
     id: 'academic',
     label: 'Academic & Talks',
     category: 'academic' as EventCategory,
-    url: '/src/assets/images/banner_academic_summit_1791432297209.jpg',
+    url: CDN_BANNERS.academic,
   },
   {
     id: 'brand',
-    label: 'Brand Indigo',
+    label: 'Modern Blue',
     category: 'general' as EventCategory,
     color: '#3345E8',
-    url: 'linear-gradient(135deg, #0E1424 0%, #3345E8 100%)',
+    url: 'linear-gradient(135deg, #1E293B 0%, #3345E8 100%)',
   },
   {
     id: 'minimal',
-    label: 'Midnight Slate',
+    label: 'Clean Slate',
     category: 'general' as EventCategory,
-    color: '#0E1424',
-    url: 'linear-gradient(135deg, #0E1424 0%, #1e293b 100%)',
+    color: '#0F172A',
+    url: 'linear-gradient(135deg, #334155 0%, #0F172A 100%)',
   },
 ];
+
+/**
+ * Returns a guaranteed valid production banner asset URL for a given event category
+ */
+export function getCategoryFallbackBanner(category?: EventCategory): string {
+  switch (category) {
+    case 'cultural':
+    case 'arts':
+      return CDN_BANNERS.cultural;
+    case 'sports':
+      return CDN_BANNERS.sports;
+    case 'academic':
+      return CDN_BANNERS.academic;
+    case 'tech':
+    default:
+      return CDN_BANNERS.tech;
+  }
+}
+
+/**
+ * Normalizes and resolves event banner URLs to ensure they work reliably
+ * across both local dev, Vite bundle, and production deployments like Vercel.
+ * Automatically maps old unbundled /src/ paths to reliable CDN images.
+ */
+export function resolveBannerUrl(url?: string | null, category?: EventCategory): string {
+  if (!url || typeof url !== 'string' || !url.trim()) {
+    return getCategoryFallbackBanner(category);
+  }
+  const clean = url.trim();
+
+  // Custom base64 uploaded image or CSS linear-gradient
+  if (clean.startsWith('data:image/') || clean.startsWith('linear-gradient')) {
+    return clean;
+  }
+
+  // Preset matchers (resolves legacy paths, public paths, and bundled URLs)
+  if (clean.includes('banner_tech_hackathon') || clean.includes('/tech') || clean.includes('tech_hackathon')) {
+    return CDN_BANNERS.tech;
+  }
+  if (clean.includes('banner_cultural_arts') || clean.includes('/cultural') || clean.includes('cultural_arts')) {
+    return CDN_BANNERS.cultural;
+  }
+  if (clean.includes('banner_sports_meet') || clean.includes('/sports') || clean.includes('sports_meet')) {
+    return CDN_BANNERS.sports;
+  }
+  if (clean.includes('banner_academic_summit') || clean.includes('/academic') || clean.includes('academic_summit')) {
+    return CDN_BANNERS.academic;
+  }
+
+  // If it's an old /src/... path that doesn't exist in production build
+  if (clean.startsWith('/src/')) {
+    return getCategoryFallbackBanner(category);
+  }
+
+  return clean;
+}
 
 export const AUTHORIZED_ORGANIZER_EMAIL = 'arjunsn258@gmail.com';
 export const AUTHORIZED_ORGANIZER_PASSWORD = '143211';
@@ -282,15 +427,21 @@ function loadEvents(): Event[] {
       localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(DEFAULT_EVENTS));
       return DEFAULT_EVENTS;
     }
-    // Enrich any existing events that might be missing description, eligibility, or agenda
+    // Enrich any existing events and automatically fix unbundled banner paths for production builds.
     let hasUpdates = false;
     const enriched = parsed.map((ev: Event) => {
       const match = DEFAULT_EVENTS.find((d) => d.id === ev.id);
+      const resolvedBanner = resolveBannerUrl(ev.bannerUrl, ev.category);
+      if (resolvedBanner !== ev.bannerUrl) {
+        hasUpdates = true;
+      }
+
       if (match && (!ev.description || !ev.agenda || !ev.eligibility)) {
         hasUpdates = true;
         return {
           ...match,
           ...ev,
+          bannerUrl: resolvedBanner,
           description: ev.description || match.description,
           organizerName: ev.organizerName || match.organizerName,
           eligibility: ev.eligibility || match.eligibility,
@@ -300,7 +451,10 @@ function loadEvents(): Event[] {
           perks: ev.perks || match.perks,
         };
       }
-      return ev;
+      return {
+        ...ev,
+        bannerUrl: resolvedBanner,
+      };
     });
 
     if (hasUpdates) {
@@ -446,6 +600,94 @@ function notifyStoreChange(): void {
   });
 }
 
+// ----------------------------------------------------
+// Supabase Live Synchronization & Realtime Subscriptions
+// ----------------------------------------------------
+let isSyncStarted = false;
+
+export async function initSupabaseSync(): Promise<void> {
+  if (isSyncStarted) return;
+  isSyncStarted = true;
+
+  try {
+    // 1. Fetch live events from Supabase
+    const remoteEvents = await fetchEventsFromSupabase();
+    if (remoteEvents && remoteEvents.length > 0) {
+      const localEvents = loadEvents();
+      const map = new Map<string, Event>();
+      remoteEvents.forEach((e) => map.set(e.id, e));
+      // Keep any local events not yet in remote
+      localEvents.forEach((e) => {
+        if (!map.has(e.id)) {
+          map.set(e.id, e);
+          saveEventToSupabase(e);
+        }
+      });
+      const merged = Array.from(map.values());
+      localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(merged));
+      notifyStoreChange();
+    } else if (remoteEvents && remoteEvents.length === 0) {
+      // Remote table is empty, backfill default events
+      const localEvents = loadEvents();
+      for (const e of localEvents) {
+        await saveEventToSupabase(e);
+      }
+    }
+
+    // 2. Fetch live registrations from Supabase
+    const remoteRegs = await fetchRegistrationsFromSupabase();
+    if (remoteRegs && remoteRegs.length > 0) {
+      const localRegs = loadRegistrations();
+      const map = new Map<string, Registration>();
+      remoteRegs.forEach((r) => map.set(r.code.toUpperCase(), r));
+      localRegs.forEach((r) => {
+        if (!map.has(r.code.toUpperCase())) {
+          map.set(r.code.toUpperCase(), r);
+          saveRegistrationToSupabase(r);
+        }
+      });
+      const merged = Array.from(map.values());
+      localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(merged));
+      notifyStoreChange();
+    }
+
+    // 3. Fetch live feedback from Supabase
+    const remoteFeedback = await fetchFeedbackFromSupabase();
+    if (remoteFeedback && remoteFeedback.length > 0) {
+      localStorage.setItem(STORAGE_KEYS.FEEDBACK, JSON.stringify(remoteFeedback));
+      notifyStoreChange();
+    }
+
+    // 4. Set up Supabase Realtime Channel
+    supabase
+      .channel('eventease_realtime_channel')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, async () => {
+        const fresh = await fetchEventsFromSupabase();
+        if (fresh) {
+          localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(fresh));
+          notifyStoreChange();
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'registrations' }, async () => {
+        const fresh = await fetchRegistrationsFromSupabase();
+        if (fresh) {
+          localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(fresh));
+          notifyStoreChange();
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'feedback' }, async () => {
+        const fresh = await fetchFeedbackFromSupabase();
+        if (fresh) {
+          localStorage.setItem(STORAGE_KEYS.FEEDBACK, JSON.stringify(fresh));
+          notifyStoreChange();
+        }
+      })
+      .subscribe();
+  } catch (err) {
+    console.warn('[Supabase Sync] Background sync warning:', err);
+  }
+}
+
 /**
  * Generate cryptographically random 6-character code from specified alphabet:
  * ABCDEFGHJKLMNPQRSTUVWXYZ23456789 (no 0/O/1/I)
@@ -511,8 +753,8 @@ export function createEvent(input: {
 
   const date = (input.date || '').trim() || 'Date TBA';
   const venue = (input.venue || '').trim() || 'Main Campus';
-  const bannerUrl = (input.bannerUrl || '').trim() || PRESET_BANNERS[0].url;
   const category = input.category || 'tech';
+  const bannerUrl = resolveBannerUrl(input.bannerUrl, category);
   const organizerEmail = (input.organizerEmail || '').trim().toLowerCase() || undefined;
 
   const events = loadEvents();
@@ -540,6 +782,8 @@ export function createEvent(input: {
 
   events.push(newEvent);
   saveEvents(events);
+  // Persist to Supabase backend
+  saveEventToSupabase(newEvent).catch((e) => console.warn('Supabase saveEvent error:', e));
   return newEvent;
 }
 
@@ -662,8 +906,24 @@ export async function register(input: {
     createdAt: new Date().toISOString(),
   };
 
+  // Persist to Supabase backend with database-level duplicate prevention
+  const supabaseRes = await saveRegistrationToSupabase(registration);
+  if (supabaseRes && !supabaseRes.success && supabaseRes.duplicate) {
+    throw new Error('This email is already registered for this event.');
+  }
+
   allRegistrations.push(registration);
   saveRegistrations(allRegistrations);
+
+  // Automatically remember participant profile for smooth dashboard & auto-fill
+  saveAttendeeProfile({
+    name: trimmedName,
+    email: normalizedEmail,
+    phone: input.phone?.trim(),
+    collegeName: input.collegeName?.trim(),
+    branch: input.branch?.trim(),
+    specialization: input.specialization?.trim(),
+  });
 
   return {
     code,
@@ -722,6 +982,11 @@ export function checkIn(rawCode: string): CheckInResult {
 
   saveRegistrations(allRegistrations);
 
+  // Sync check-in to Supabase backend
+  updateRegistrationCheckInInSupabase(targetReg.code, true, nowIso, targetReg.eventId).catch((e) =>
+    console.warn('Supabase checkIn error:', e)
+  );
+
   return {
     status: 'SUCCESS',
     name: targetReg.name,
@@ -750,6 +1015,9 @@ export function undoCheckIn(rawCode: string): boolean {
   };
 
   saveRegistrations(allRegistrations);
+  updateRegistrationCheckInInSupabase(code, false, null).catch((e) =>
+    console.warn('Supabase undoCheckIn error:', e)
+  );
   return true;
 }
 
@@ -908,6 +1176,9 @@ export function addFeedback(input: {
 
   all.push(newFeedback);
   saveFeedback(all);
+  saveFeedbackToSupabase(newFeedback).catch((e) =>
+    console.warn('Supabase saveFeedback error:', e)
+  );
   return newFeedback;
 }
 
@@ -943,6 +1214,10 @@ export function deleteEvent(eventId: string): void {
 
   const fb = loadFeedback().filter((f) => f.eventId !== eventId);
   saveFeedback(fb);
+
+  deleteEventFromSupabase(eventId).catch((e) =>
+    console.warn('Supabase deleteEvent error:', e)
+  );
 }
 
 /**
@@ -987,6 +1262,9 @@ export function updateEventStatus(eventId: string, status: EventStatus): void {
       status,
     };
     saveEvents(events);
+    updateEventInSupabase(eventId, { status }).catch((e) =>
+      console.warn('Supabase updateEventStatus error:', e)
+    );
   }
 }
 
@@ -1015,10 +1293,17 @@ export function updateEvent(
     updates.capacity = capNum;
   }
 
+  if (updates.bannerUrl !== undefined) {
+    updates.bannerUrl = resolveBannerUrl(updates.bannerUrl, updates.category || events[idx].category);
+  }
+
   events[idx] = {
     ...events[idx],
     ...updates,
   };
   saveEvents(events);
+  updateEventInSupabase(eventId, updates).catch((e) =>
+    console.warn('Supabase updateEvent error:', e)
+  );
   return events[idx];
 }

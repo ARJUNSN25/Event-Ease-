@@ -35,6 +35,7 @@ import { StudentFeedbackModal } from './StudentFeedbackModal';
 import { DateTimePicker } from './DateTimePicker';
 import { BannerUploader } from './BannerUploader';
 import { ShareModal } from './ShareModal';
+import { EventBannerImage } from './EventBannerImage';
 import { useToast } from './Toast';
 import {
   Plus,
@@ -68,6 +69,9 @@ import {
   Settings,
   Eye,
   Camera,
+  Database,
+  Copy,
+  Cloud,
 } from 'lucide-react';
 
 interface OrganizerViewProps {
@@ -603,24 +607,15 @@ export function OrganizerView({
           {currentEvent && (
             <div className="relative rounded-[20px] overflow-hidden border border-[#E1E5EE] shadow-sm min-h-[190px] flex flex-col justify-between p-6 sm:p-8 text-white">
               {/* Background Banner */}
-              {currentEvent.bannerUrl?.startsWith('linear-gradient') ? (
-                <div
-                  className="absolute inset-0"
-                  style={{ background: currentEvent.bannerUrl }}
-                />
-              ) : currentEvent.bannerUrl ? (
-                <img
-                  src={currentEvent.bannerUrl}
-                  alt={currentEvent.name}
-                  className="absolute inset-0 w-full h-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <div className="absolute inset-0 bg-[#0E1424]" />
-              )}
+              <EventBannerImage
+                src={currentEvent.bannerUrl}
+                category={currentEvent.category}
+                alt={currentEvent.name}
+                className="absolute inset-0 w-full h-full object-cover"
+              />
 
               {/* Scrim overlay */}
-              <div className="absolute inset-0 bg-gradient-to-t from-[#0E1424]/95 via-[#0E1424]/75 to-[#0E1424]/40" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#0E1424]/95 via-[#0E1424]/75 to-[#0E1424]/40 pointer-events-none" />
 
               {/* Top Controls on Banner */}
               <div className="relative z-10 flex flex-wrap items-center justify-between gap-3">
@@ -843,14 +838,14 @@ export function OrganizerView({
           )}
 
           {/* Navigation Tabs Bar */}
-          <div className="flex items-center gap-2 border-b border-[#E1E5EE] pb-2 overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-2 border-b border-slate-200/90 pb-2 overflow-x-auto no-scrollbar">
             <button
               type="button"
               onClick={() => setActiveTab('roster')}
               className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-[10px] text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'roster'
-                  ? 'bg-[#0E1424] text-white shadow-sm'
-                  : 'text-[#5B6478] hover:text-[#0E1424] hover:bg-white'
+                  ? 'bg-[#3345E8] text-white shadow-[0_2px_8px_rgba(51,69,232,0.25)]'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 border border-transparent'
               }`}
             >
               <Users className="w-4 h-4" />
@@ -862,8 +857,8 @@ export function OrganizerView({
               onClick={() => setActiveTab('quickdesk')}
               className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-[10px] text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'quickdesk'
-                  ? 'bg-[#0E1424] text-white shadow-sm'
-                  : 'text-[#5B6478] hover:text-[#0E1424] hover:bg-white'
+                  ? 'bg-[#3345E8] text-white shadow-[0_2px_8px_rgba(51,69,232,0.25)]'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 border border-transparent'
               }`}
             >
               <ScanLine className="w-4 h-4" />
@@ -875,8 +870,8 @@ export function OrganizerView({
               onClick={() => setActiveTab('feedback')}
               className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-[10px] text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'feedback'
-                  ? 'bg-[#0E1424] text-white shadow-sm'
-                  : 'text-[#5B6478] hover:text-[#0E1424] hover:bg-white'
+                  ? 'bg-[#3345E8] text-white shadow-[0_2px_8px_rgba(51,69,232,0.25)]'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 border border-transparent'
               }`}
             >
               <MessageSquare className="w-4 h-4" />
@@ -888,8 +883,8 @@ export function OrganizerView({
               onClick={() => setActiveTab('settings')}
               className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-[10px] text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'settings'
-                  ? 'bg-[#0E1424] text-white shadow-sm'
-                  : 'text-[#5B6478] hover:text-[#0E1424] hover:bg-white'
+                  ? 'bg-[#3345E8] text-white shadow-[0_2px_8px_rgba(51,69,232,0.25)]'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 border border-transparent'
               }`}
             >
               <Settings className="w-4 h-4" />
@@ -899,7 +894,7 @@ export function OrganizerView({
 
           {/* TAB 1: ATTENDEE ROSTER DIRECTORY */}
           {activeTab === 'roster' && (
-            <div className="bg-white rounded-[20px] border border-[#E1E5EE] shadow-sm p-4 sm:p-6 space-y-4">
+            <div className="bg-white rounded-[20px] border border-slate-200/90 shadow-2xs p-4 sm:p-6 space-y-4">
               {/* Search & Filter Controls */}
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-[#E1E5EE]">
                 <div>
@@ -1536,6 +1531,27 @@ export function OrganizerView({
                       </div>
                       <div><strong>Capacity:</strong> {currentEvent.capacity} seats</div>
                       <div><strong>Organizer:</strong> {currentEvent.organizerEmail || AUTHORIZED_ORGANIZER_EMAIL}</div>
+                    </div>
+                  </div>
+
+                  {/* Supabase Backend Integration Info */}
+                  <div className="p-4 rounded-[14px] border border-indigo-200 bg-indigo-50/50 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-indigo-950 font-bold text-sm">
+                        <Database className="w-4 h-4 text-indigo-600" />
+                        <span>Supabase Backend & Storage</span>
+                      </div>
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                        Connected
+                      </span>
+                    </div>
+                    <div className="text-xs text-slate-600 space-y-1">
+                      <div><strong>Project ID:</strong> <code className="bg-white px-1.5 py-0.5 rounded text-indigo-700 font-mono text-[11px] border border-indigo-100">ooxhjbafurogcnqurdvo</code></div>
+                      <div><strong>Storage Bucket:</strong> <code className="bg-white px-1.5 py-0.5 rounded text-slate-700 font-mono text-[11px] border border-indigo-100">event-banners</code></div>
+                      <p className="text-[11px] text-slate-500 pt-1">
+                        Events, participant registrations, attendance, and banners are automatically synced with Supabase.
+                      </p>
                     </div>
                   </div>
 

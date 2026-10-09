@@ -1,39 +1,35 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: 'Manrope', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  --color-ink: #0E1424;
-  --color-slate: #5B6478;
-  --color-mist: #F4F6FA;
-  --color-surface: #FFFFFF;
-  --color-line: #E1E5EE;
-  
-  --color-brand: #3345E8;
-  --color-brand-hover: #2735C4;
-  --color-brand-tint: #E8EBFE;
+  --color-bg-base: #F8FAFC;
+  --color-card-base: #FFFFFF;
+  --color-primary: #4F46E5;
+  --color-secondary: #2563EB;
+  --color-text-main: #0F172A;
+  --color-text-secondary: #64748B;
+  --color-border-line: #E2E8F0;
 
-  --color-success: #12805C;
-  --color-success-bg: #DDF5EA;
+  --color-success: #16A34A;
+  --color-warning: #F59E0B;
+  --color-danger: #DC2626;
 
-  --color-warning: #B25E00;
-  --color-warning-bg: #FFEBCB;
-
-  --color-danger: #C0302F;
-  --color-danger-bg: #FCE1E1;
-
-  --shadow-soft: 0 8px 24px rgba(14, 20, 36, 0.08);
+  --shadow-card: 0 1px 3px 0 rgba(15, 23, 42, 0.05), 0 1px 2px -1px rgba(15, 23, 42, 0.05);
+  --shadow-hover: 0 10px 25px -3px rgba(79, 70, 229, 0.08), 0 4px 6px -4px rgba(79, 70, 229, 0.04);
 }
 
 :root {
-  font-family: 'Manrope', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: #F8FAFC;
+  color: #0F172A;
 }
 
 body {
-  font-family: 'Manrope', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background-color: #F4F6FA;
-  color: #0E1424;
+  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: #F8FAFC;
+  color: #0F172A;
 }
 
 .safe-area-pb {
@@ -55,9 +51,9 @@ html, body {
   transform: translateY(-50%);
   width: 24px;
   height: 24px;
-  background-color: #F4F6FA;
+  background-color: #F8FAFC;
   border-radius: 9999px;
-  box-shadow: inset -1px 0 0 #E1E5EE;
+  box-shadow: inset -1px 0 0 #E2E8F0;
 }
 
 .ticket-notch-right {
@@ -67,9 +63,9 @@ html, body {
   transform: translateY(-50%);
   width: 24px;
   height: 24px;
-  background-color: #F4F6FA;
+  background-color: #F8FAFC;
   border-radius: 9999px;
-  box-shadow: inset 1px 0 0 #E1E5EE;
+  box-shadow: inset 1px 0 0 #E2E8F0;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -97,25 +97,25 @@ export function StudentFeedbackModal({
       {/* Modal Dialog Card */}
       <div className="relative z-10 w-full max-w-lg bg-white rounded-[20px] border border-[#E1E5EE] shadow-[0_12px_32px_rgba(14,20,36,0.12)] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
-        <div className="bg-[#0E1424] text-white p-6 relative">
+        <div className="bg-slate-50 border-b border-slate-200/90 text-slate-900 p-6 relative">
           <button
             type="button"
             onClick={onClose}
-            className="absolute right-4 top-4 p-1.5 rounded-full text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+            className="absolute right-4 top-4 p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors cursor-pointer"
             aria-label="Close feedback modal"
           >
             <X className="w-5 h-5" />
           </button>
 
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/10 text-xs font-semibold text-white/90 mb-2">
-            <MessageSquare className="w-3.5 h-3.5 text-blue-300" />
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-50 border border-indigo-100 text-xs font-bold text-[#3345E8] mb-2">
+            <MessageSquare className="w-3.5 h-3.5 text-[#3345E8]" />
             <span>Attendee Feedback</span>
           </div>
 
-          <h3 id="feedback-title" className="text-xl font-bold text-white leading-tight">
+          <h3 id="feedback-title" className="text-xl font-extrabold text-slate-950 leading-tight">
             Review {event.name}
           </h3>
-          <p className="text-xs text-white/70 mt-1">
+          <p className="text-xs text-slate-600 mt-1">
             Share your experience, organization feedback, and suggestions.
           </p>
         </div>

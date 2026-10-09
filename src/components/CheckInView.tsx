@@ -616,17 +616,17 @@ export function CheckInView({
       <div id="qr-file-scratchpad" style={{ display: 'none' }} />
 
       {/* Top Bar: Event Header & Live Gate Counters */}
-      <div className="bg-white rounded-[16px] border border-[#E1E5EE] p-5 shadow-xs">
+      <div className="bg-white rounded-[18px] border border-slate-200/90 p-5 shadow-2xs">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           {/* Left Title + Event Switcher */}
           <div>
-            <div className="flex items-center gap-2 text-xs uppercase tracking-wider font-bold text-[#5B6478] mb-1">
+            <div className="flex items-center gap-2 text-xs uppercase tracking-wider font-bold text-slate-500 mb-1">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <span>Live Gate Check-in Desk</span>
             </div>
 
             <div className="flex items-center gap-3">
-              <span className="text-xl sm:text-2xl font-black text-[#0E1424] tracking-tight">
+              <span className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
                 Event:
               </span>
               <div className="flex flex-wrap items-center gap-2">
@@ -634,7 +634,7 @@ export function CheckInView({
                   <select
                     value={selectedEventId || ''}
                     onChange={(e) => onSelectEventId(e.target.value)}
-                    className="appearance-none bg-white border border-[#E1E5EE] text-[#0E1424] font-bold text-base sm:text-lg py-1.5 pl-3 pr-8 rounded-[8px] focus:outline-none focus:ring-3 focus:ring-[#3345E8]/30 focus:border-[#3345E8] cursor-pointer max-w-[240px] sm:max-w-xs truncate shadow-xs"
+                    className="appearance-none bg-white border border-slate-200/90 text-slate-900 font-bold text-base sm:text-lg py-1.5 pl-3 pr-8 rounded-[8px] focus:outline-none focus:ring-3 focus:ring-[#3345E8]/20 focus:border-[#3345E8] cursor-pointer max-w-[240px] sm:max-w-xs truncate shadow-2xs"
                     aria-label="Select event for check-in"
                   >
                     {events.map((ev) => (
@@ -643,14 +643,14 @@ export function CheckInView({
                       </option>
                     ))}
                   </select>
-                  <ChevronDown className="w-4 h-4 text-[#5B6478] pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" />
+                  <ChevronDown className="w-4 h-4 text-slate-400 pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" />
                 </div>
 
                 {currentEvent && (() => {
                   const cat = getCategoryInfo(currentEvent.category);
                   const Icon = cat.icon;
                   return (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#F4F6FA] text-[#0E1424] border border-[#E1E5EE]">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-800 border border-slate-200">
                       <Icon className="w-3.5 h-3.5 text-[#3345E8]" />
                       <span>{cat.label}</span>
                     </span>
@@ -661,24 +661,24 @@ export function CheckInView({
           </div>
 
           {/* Right: Live Counters (Registered / Checked in / Seats left) */}
-          <div className="flex flex-wrap items-center gap-3 sm:gap-6 bg-[#F4F6FA] px-4 py-3 rounded-[12px] border border-[#E1E5EE]">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-6 bg-slate-50/80 px-4 py-3 rounded-[12px] border border-slate-200/80">
             <div className="text-center">
-              <div className="text-[11px] uppercase font-bold text-[#5B6478]">Registered</div>
-              <div className="text-lg sm:text-2xl font-extrabold text-[#0E1424] tabular-nums">
+              <div className="text-[11px] uppercase font-bold text-slate-500">Registered</div>
+              <div className="text-lg sm:text-2xl font-extrabold text-slate-900 tabular-nums">
                 {stats.registered}
               </div>
             </div>
-            <div className="w-px h-8 bg-[#E1E5EE]" />
+            <div className="w-px h-8 bg-slate-200" />
             <div className="text-center">
-              <div className="text-[11px] uppercase font-bold text-[#12805C]">Checked in</div>
-              <div className="text-lg sm:text-2xl font-extrabold text-[#12805C] tabular-nums">
+              <div className="text-[11px] uppercase font-bold text-emerald-700">Checked in</div>
+              <div className="text-lg sm:text-2xl font-extrabold text-emerald-600 tabular-nums">
                 {stats.attended}
               </div>
             </div>
-            <div className="w-px h-8 bg-[#E1E5EE]" />
+            <div className="w-px h-8 bg-slate-200" />
             <div className="text-center">
-              <div className="text-[11px] uppercase font-bold text-[#5B6478]">Remaining</div>
-              <div className="text-lg sm:text-2xl font-extrabold text-[#0E1424] tabular-nums">
+              <div className="text-[11px] uppercase font-bold text-slate-500">Remaining</div>
+              <div className="text-lg sm:text-2xl font-extrabold text-slate-900 tabular-nums">
                 {stats.remaining}
               </div>
             </div>
@@ -686,19 +686,19 @@ export function CheckInView({
         </div>
 
         {/* Attendance Progress Bar */}
-        <div className="mt-4 pt-4 border-t border-[#E1E5EE]/70">
-          <div className="flex items-center justify-between text-xs font-semibold text-[#5B6478] mb-1.5">
+        <div className="mt-4 pt-4 border-t border-slate-100">
+          <div className="flex items-center justify-between text-xs font-semibold text-slate-600 mb-1.5">
             <span className="flex items-center gap-1.5">
               <span>Gate Progress:</span>
-              <span className="text-[#12805C] font-bold">{attendedPercentage}% Admitted</span>
+              <span className="text-emerald-700 font-bold">{attendedPercentage}% Admitted</span>
             </span>
             <span>
               {stats.attended} of {stats.registered} students entered
             </span>
           </div>
-          <div className="w-full bg-[#E1E5EE] h-2 rounded-full overflow-hidden">
+          <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
             <div
-              className="bg-[#12805C] h-full rounded-full transition-all duration-300"
+              className="bg-emerald-600 h-full rounded-full transition-all duration-300"
               style={{ width: `${attendedPercentage}%` }}
             />
           </div>
@@ -708,28 +708,28 @@ export function CheckInView({
       {/* Main Grid: Left Scanner Options & Viewport vs Right Verification Card */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Column: Scanner Options & Viewport (6 cols) */}
-        <div className="lg:col-span-6 bg-white rounded-[16px] border border-[#E1E5EE] p-5 shadow-xs space-y-4">
+        <div className="lg:col-span-6 bg-white rounded-[18px] border border-slate-200/90 p-5 shadow-2xs space-y-4">
           {/* Header & Mode Switcher: Camera / Upload Image / Manual Code */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E1E5EE]">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
             <div>
-              <h2 className="text-base font-bold text-[#0E1424] flex items-center gap-2">
+              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <QrCode className="w-4 h-4 text-[#3345E8]" />
                 <span>Student Pass Scanner</span>
               </h2>
-              <p className="text-xs text-[#5B6478] mt-0.5">
+              <p className="text-xs text-slate-500 mt-0.5">
                 Scan pass with camera, upload pass image, or type code
               </p>
             </div>
 
             {/* Mode Tabs */}
-            <div className="flex items-center p-1 bg-[#F4F6FA] rounded-[10px] border border-[#E1E5EE] self-start sm:self-auto">
+            <div className="flex items-center p-1 bg-slate-100/80 rounded-[10px] border border-slate-200/80 self-start sm:self-auto">
               <button
                 type="button"
                 onClick={() => handleSelectMode('camera')}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-[6px] transition-all ${
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-[6px] transition-all cursor-pointer ${
                   scanMode === 'camera'
-                    ? 'bg-[#0E1424] text-white shadow-xs'
-                    : 'text-[#5B6478] hover:text-[#0E1424]'
+                    ? 'bg-white text-slate-950 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-950'
                 }`}
                 title="Scan live student QR code using camera"
               >
@@ -740,24 +740,24 @@ export function CheckInView({
               <button
                 type="button"
                 onClick={() => handleSelectMode('upload')}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-[6px] transition-all ${
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-[6px] transition-all cursor-pointer ${
                   scanMode === 'upload'
-                    ? 'bg-[#3345E8] text-white shadow-xs'
-                    : 'text-[#5B6478] hover:text-[#0E1424]'
+                    ? 'bg-white text-slate-950 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-950'
                 }`}
                 title="Upload screenshot or photo of student ticket pass"
               >
                 <FileUp className="w-3.5 h-3.5" />
-                <span>Upload Image</span>
+                <span>Upload</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => handleSelectMode('manual')}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-[6px] transition-all ${
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-[6px] transition-all cursor-pointer ${
                   scanMode === 'manual'
-                    ? 'bg-[#0E1424] text-white shadow-xs'
-                    : 'text-[#5B6478] hover:text-[#0E1424]'
+                    ? 'bg-white text-slate-950 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-950'
                 }`}
                 title="Type ticket code directly"
               >

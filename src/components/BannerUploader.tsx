@@ -15,8 +15,11 @@ import {
   FolderUp,
   Camera,
   AlertCircle,
+  Cloud,
 } from 'lucide-react';
-import { PRESET_BANNERS } from '../store';
+import { PRESET_BANNERS, resolveBannerUrl } from '../store';
+import { EventBannerImage } from './EventBannerImage';
+import { uploadBannerToStorage } from '../supabase';
 
 interface BannerUploaderProps {
   value: string;
@@ -81,8 +84,9 @@ export function BannerUploader({
   error,
 }: BannerUploaderProps) {
   // Determine initial mode based on value
+  const resolvedValue = resolveBannerUrl(value);
   const isCustomUpload = value.startsWith('data:image/');
-  const isPreset = PRESET_BANNERS.some((p) => p.url === value);
+  const isPreset = PRESET_BANNERS.some((p) => p.url === value || p.url === resolvedValue);
   const initialMode = isCustomUpload ? 'upload' : isPreset ? 'preset' : 'url';
 
   const [activeTab, setActiveTab] = useState<'upload' | 'preset' | 'url'>(initialMode);
@@ -114,10 +118,19 @@ export function BannerUploader({
     setIsProcessing(true);
 
     try {
-      const compressedUrl = await compressAndResizeImage(file);
-      setFileName(file.name);
-      onChange(compressedUrl);
-      setActiveTab('upload');
+      // 1. Attempt upload to Supabase Storage bucket 'event-banners'
+      const supabaseUrl = await uploadBannerToStorage(file, file.name);
+      if (supabaseUrl) {
+        setFileName(file.name);
+        onChange(supabaseUrl);
+        setActiveTab('upload');
+      } else {
+        // Fallback to client-side compressed data URL
+        const compressedUrl = await compressAndResizeImage(file);
+        setFileName(file.name);
+        onChange(compressedUrl);
+        setActiveTab('upload');
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Could not process image.';
       setUploadError(msg);
@@ -193,31 +206,30 @@ export function BannerUploader({
       {/* Live Banner Preview Card */}
       <div className="relative rounded-[14px] overflow-hidden border border-[#E1E5EE] bg-[#0E1424] shadow-xs group">
         <div className="h-28 sm:h-32 w-full relative overflow-hidden flex items-center justify-center">
-          {value.startsWith('linear-gradient') ? (
-            <div className="w-full h-full" style={{ background: value }} />
-          ) : (
-            <img
-              src={value}
-              alt="Event banner preview"
-              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-              onError={(e) => {
-                // If custom URL failed to load, show gradient fallback
-                (e.target as HTMLImageElement).src = PRESET_BANNERS[0].url;
-              }}
-            />
-          )}
+          <EventBannerImage
+            src={value}
+            alt="Event banner preview"
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
 
           {/* Gradient overlay for readability */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent flex flex-col justify-between p-3 pointer-events-none">
             <div className="flex items-center justify-between">
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide bg-black/60 text-white border border-white/20 backdrop-blur-xs">
-                <Sparkles className="w-2.5 h-2.5 text-[#E6A23C]" />
-                {isCustomUpload
-                  ? 'Your Custom Upload'
-                  : isPreset
-                  ? 'Preset Theme'
-                  : 'Custom Image URL'}
-              </span>
+              {value?.includes('supabase.co') ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide bg-indigo-900/80 text-indigo-200 border border-indigo-400/40 backdrop-blur-xs">
+                  <Cloud className="w-2.5 h-2.5 text-indigo-300" />
+                  Supabase Cloud Storage
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide bg-black/60 text-white border border-white/20 backdrop-blur-xs">
+                  <Sparkles className="w-2.5 h-2.5 text-[#E6A23C]" />
+                  {isCustomUpload
+                    ? 'Your Custom Upload'
+                    : isPreset
+                    ? 'Preset Theme'
+                    : 'Custom Image URL'}
+                </span>
+              )}
 
               {fileName && (
                 <span className="text-[10px] text-white/90 font-medium truncate max-w-[140px] bg-black/40 px-2 py-0.5 rounded">
