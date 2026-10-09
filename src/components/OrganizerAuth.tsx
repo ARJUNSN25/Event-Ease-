@@ -33,17 +33,15 @@ interface OrganizerAuthProps {
 
 export function OrganizerAuth({ onLoginSuccess, onNavigateToRegister }: OrganizerAuthProps) {
   const { showToast } = useToast();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('arjun.s.n.140017@marwadiuniversity.ac.in');
+  const [password, setPassword] = useState(AUTHORIZED_ORGANIZER_PASSWORD);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [deniedEmail, setDeniedEmail] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setDeniedEmail(null);
 
     const trimmedEmail = email.trim().toLowerCase();
     const cleanPassword = password.trim();
@@ -58,26 +56,17 @@ export function OrganizerAuth({ onLoginSuccess, onNavigateToRegister }: Organize
       return;
     }
 
-    // Check email authorization
-    if (!isAuthorizedOrganizerEmail(trimmedEmail)) {
-      setDeniedEmail(trimmedEmail);
-      setError(
-        `Access Denied: '${trimmedEmail}' is not authorized for the Organizer Portal. Other email addresses are reserved for student & attendee event registration.`
-      );
-      return;
-    }
-
     // Check credentials (email + password)
     const isValid = verifyOrganizerCredentials(trimmedEmail, cleanPassword);
     if (!isValid) {
-      setError('Incorrect password. Please verify your credentials and try again.');
+      setError('Incorrect password. Please enter the organizer password (default: 143211).');
       return;
     }
 
     setIsSubmitting(true);
     try {
       setOrganizerSession(trimmedEmail, cleanPassword);
-      showToast('Welcome back! Organizer session authenticated.', 'success');
+      showToast('Welcome! Organizer session authenticated.', 'success');
       onLoginSuccess(trimmedEmail);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Authentication failed.';
@@ -87,11 +76,16 @@ export function OrganizerAuth({ onLoginSuccess, onNavigateToRegister }: Organize
     }
   };
 
-  const handleFillDemoCredentials = () => {
-    setEmail(AUTHORIZED_ORGANIZER_EMAIL);
+  const handleFillUniversity = () => {
+    setEmail('arjun.s.n.140017@marwadiuniversity.ac.in');
     setPassword(AUTHORIZED_ORGANIZER_PASSWORD);
     setError(null);
-    setDeniedEmail(null);
+  };
+
+  const handleFillPersonal = () => {
+    setEmail('arjunsn258@gmail.com');
+    setPassword(AUTHORIZED_ORGANIZER_PASSWORD);
+    setError(null);
   };
 
   return (
@@ -103,55 +97,22 @@ export function OrganizerAuth({ onLoginSuccess, onNavigateToRegister }: Organize
             <div className="w-12 h-12 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-sm shadow-indigo-600/30">
               <ShieldCheck className="w-6 h-6" />
             </div>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
-              <Lock className="w-3 h-3 text-amber-700" />
-              Restricted Console
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+              <Lock className="w-3 h-3 text-indigo-600" />
+              Organizer Console
             </span>
           </div>
 
           <h1 className="text-2xl sm:text-[26px] font-extrabold text-slate-900 tracking-tight">
-            Organizer Portal
+            Organizer Portal Sign In
           </h1>
           <p className="text-xs sm:text-[13px] text-slate-500 mt-1.5 leading-relaxed">
-            Administrative access is strictly protected. Sign in with authorized organizer email and security password to manage events and check-in desks.
+            Administrative access for campus event directors. Sign in to manage events, monitor live attendance tracking, and run gate check-in scanners.
           </p>
         </div>
 
         {/* Form Body */}
         <div className="p-6 sm:p-7 space-y-5">
-          {/* Access Denied Callout Box when an unauthorized email is entered */}
-          {deniedEmail && (
-            <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-900 space-y-3 animate-in fade-in">
-              <div className="flex items-start gap-2.5">
-                <ShieldAlert className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <h2 className="text-xs font-bold uppercase tracking-wider text-red-800">
-                    Organizer Access Restricted
-                  </h2>
-                  <p className="text-xs text-red-700 leading-relaxed">
-                    The email <strong className="font-semibold text-slate-900">{deniedEmail}</strong> does not have organizer administrative privileges.
-                  </p>
-                  <p className="text-xs text-red-600 font-medium pt-0.5">
-                    Other email accounts are reserved for student & attendee event registrations.
-                  </p>
-                </div>
-              </div>
-
-              {onNavigateToRegister && (
-                <div className="pt-2 border-t border-red-200">
-                  <button
-                    type="button"
-                    onClick={() => onNavigateToRegister(deniedEmail)}
-                    className="w-full inline-flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2.5 px-3 rounded-xl transition-colors shadow-xs cursor-pointer"
-                  >
-                    <Ticket className="w-3.5 h-3.5 text-white" />
-                    <span>Register for Events with this Email &rarr;</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Email Field */}
             <div>
@@ -173,11 +134,10 @@ export function OrganizerAuth({ onLoginSuccess, onNavigateToRegister }: Organize
                   onChange={(e) => {
                     setEmail(e.target.value);
                     if (error) setError(null);
-                    if (deniedEmail) setDeniedEmail(null);
                   }}
                   placeholder="name@college.edu or organizer email"
                   className={`w-full pl-10 pr-3.5 py-2.5 text-sm bg-white border rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-colors ${
-                    error && !deniedEmail ? 'border-red-500' : 'border-slate-200'
+                    error ? 'border-red-500' : 'border-slate-200'
                   }`}
                 />
               </div>
@@ -189,7 +149,7 @@ export function OrganizerAuth({ onLoginSuccess, onNavigateToRegister }: Organize
                 htmlFor="organizer-password"
                 className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5"
               >
-                Security Password
+                Security Password (Default: 143211)
               </label>
               <div className="relative">
                 <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -205,7 +165,7 @@ export function OrganizerAuth({ onLoginSuccess, onNavigateToRegister }: Organize
                   }}
                   placeholder="Enter security password"
                   className={`w-full pl-10 pr-11 py-2.5 text-sm bg-white border rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-colors ${
-                    error && !deniedEmail ? 'border-red-500' : 'border-slate-200'
+                    error ? 'border-red-500' : 'border-slate-200'
                   }`}
                 />
                 <button
@@ -218,7 +178,7 @@ export function OrganizerAuth({ onLoginSuccess, onNavigateToRegister }: Organize
                 </button>
               </div>
 
-              {error && !deniedEmail && (
+              {error && (
                 <p className="text-xs text-red-600 font-semibold mt-2 flex items-center gap-1.5">
                   <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
                   <span>{error}</span>
@@ -226,19 +186,28 @@ export function OrganizerAuth({ onLoginSuccess, onNavigateToRegister }: Organize
               )}
             </div>
 
-            {/* Quick Demo Credentials Assistant */}
-            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
-              <div>
-                <span className="text-slate-500">Authorized: </span>
-                <span className="font-bold text-slate-800">{AUTHORIZED_ORGANIZER_EMAIL}</span>
+            {/* Quick Credentials Assistant */}
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
+              <div className="flex items-center justify-between text-slate-500 font-medium">
+                <span>Quick Sign-In presets:</span>
+                <span className="font-mono text-slate-700 font-bold">Pass: 143211</span>
               </div>
-              <button
-                type="button"
-                onClick={handleFillDemoCredentials}
-                className="text-indigo-600 hover:text-indigo-800 font-bold underline cursor-pointer"
-              >
-                Auto-fill
-              </button>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={handleFillUniversity}
+                  className="px-2.5 py-1.5 bg-white hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 text-indigo-700 rounded-lg font-semibold transition-colors cursor-pointer text-[11px]"
+                >
+                  🎓 University Account
+                </button>
+                <button
+                  type="button"
+                  onClick={handleFillPersonal}
+                  className="px-2.5 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-lg font-semibold transition-colors cursor-pointer text-[11px]"
+                >
+                  ✉️ arjunsn258@gmail.com
+                </button>
+              </div>
             </div>
 
             {/* Sign In Button */}

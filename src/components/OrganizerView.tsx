@@ -72,6 +72,8 @@ import {
   Database,
   Copy,
   Cloud,
+  Layers,
+  Zap,
 } from 'lucide-react';
 
 interface OrganizerViewProps {
@@ -101,7 +103,17 @@ export function OrganizerView({
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'checkedIn' | 'pending'>('all');
   const [collegeFilter, setCollegeFilter] = useState<string>('all');
-  const [activeTab, setActiveTab] = useState<'roster' | 'quickdesk' | 'feedback' | 'settings'>('roster');
+  const [activeTab, setActiveTab] = useState<'live' | 'roster' | 'quickdesk' | 'feedback' | 'settings'>('live');
+  const [isAllEventsModalOpen, setIsAllEventsModalOpen] = useState(false);
+
+  // Live Pulse Clock
+  const [liveClock, setLiveClock] = useState(() => new Date().toLocaleTimeString());
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setLiveClock(new Date().toLocaleTimeString());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Quick Gate Desk Code Input in Dashboard
   const [deskCodeInput, setDeskCodeInput] = useState('');
@@ -331,10 +343,15 @@ export function OrganizerView({
     if (!selectedEventId) return;
     setIsDeleting(true);
     try {
+      const remainingEvents = events.filter((e) => String(e.id) !== String(selectedEventId));
       deleteEvent(selectedEventId);
       showToast('Event removed successfully.');
       setIsDeleteModalOpen(false);
-      onSelectEventId('');
+      if (remainingEvents.length > 0) {
+        onSelectEventId(remainingEvents[0].id);
+      } else {
+        onSelectEventId('');
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Could not delete event.';
       showToast(msg, 'error');
@@ -342,6 +359,32 @@ export function OrganizerView({
       setIsDeleting(false);
     }
   };
+
+  // Simulate Live Attendee Join (For live presentation & hackathon testing)
+  const handleSimulateLiveJoin = () => {
+    if (!currentEvent) return;
+    const pending = participants.filter((p) => !p.checkedIn);
+    if (pending.length > 0) {
+      const candidate = pending[0];
+      const res = checkIn(candidate.code);
+      if (res.status === 'SUCCESS') {
+        playSuccessBeep();
+        showToast(`⚡ Live Join: ${candidate.name} (${candidate.collegeName || 'Student'}) checked in!`, 'success');
+      }
+    } else {
+      showToast('All registered attendees have already joined this session!', 'info');
+    }
+  };
+
+  const checkedInParticipants = useMemo(() => {
+    return participants
+      .filter((p) => p.checkedIn)
+      .sort((a, b) => {
+        const timeA = a.checkedInAt ? new Date(a.checkedInAt).getTime() : 0;
+        const timeB = b.checkedInAt ? new Date(b.checkedInAt).getTime() : 0;
+        return timeB - timeA;
+      });
+  }, [participants]);
 
   // Open New Event panel
   const handleOpenPanel = () => {
@@ -505,9 +548,21 @@ export function OrganizerView({
             </div>
           )}
 
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#EBFBF4] text-[#12805C] border border-[#12805C]/20 text-xs font-bold w-fit">
-            <ShieldCheck className="w-4 h-4 text-[#12805C]" />
-            <span>Authorized: {organizerEmail || AUTHORIZED_ORGANIZER_EMAIL}</span>
+          {events.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setIsAllEventsModalOpen(true)}
+              className="inline-flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold px-3 py-2 border border-slate-200 rounded-xl transition-colors cursor-pointer shadow-2xs"
+              title="View all created events"
+            >
+              <Layers className="w-3.5 h-3.5 text-indigo-600" />
+              <span>All Events ({events.length})</span>
+            </button>
+          )}
+
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200/80 text-xs font-bold w-fit">
+            <ShieldCheck className="w-4 h-4 text-indigo-600" />
+            <span>Organizer: {organizerEmail || 'Event Admin'}</span>
           </div>
         </div>
 
@@ -841,6 +896,22 @@ export function OrganizerView({
           <div className="flex items-center gap-2 border-b border-slate-200/90 pb-2 overflow-x-auto no-scrollbar">
             <button
               type="button"
+              onClick={() => setActiveTab('live')}
+              className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-[10px] text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
+                activeTab === 'live'
+                  ? 'bg-emerald-600 text-white shadow-[0_2px_8px_rgba(16,185,129,0.35)]'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 border border-transparent'
+              }`}
+            >
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-400"></span>
+              </span>
+              <span>Live Attendance Pulse ({stats.attended} Joined)</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setActiveTab('roster')}
               className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-[10px] text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'roster'
@@ -891,6 +962,374 @@ export function OrganizerView({
               <span>Event Settings</span>
             </button>
           </div>
+
+          {/* TAB 0: LIVE ATTENDANCE PULSE & REAL-TIME TRACKING */}
+          {activeTab === 'live' && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              {/* Live Banner & Real-Time Sync Bar */}
+              <div className="bg-gradient-to-r from-emerald-950 via-slate-900 to-indigo-950 text-white rounded-[20px] p-5 sm:p-7 border border-emerald-900/40 shadow-sm relative overflow-hidden">
+                <div className="absolute right-0 top-0 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="space-y-1.5">
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        <span className="relative flex h-2.5 w-2.5">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-400"></span>
+                        </span>
+                        LIVE ATTENDANCE PULSE
+                      </span>
+                      <span className="text-xs text-slate-400 font-medium">
+                        Live clock: <strong className="text-white font-mono">{liveClock}</strong>
+                      </span>
+                    </div>
+                    <h3 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                      {currentEvent ? currentEvent.name : 'Event Live Stream'}
+                    </h3>
+                    <p className="text-xs sm:text-sm text-slate-300 max-w-xl">
+                      Real-time gate check-ins and attendance tracking. Monitors incoming students, capacity limits, and venue flow live.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={handleSimulateLiveJoin}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition-all shadow-md cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+                      title="Simulate a real-time student check-in to test the live counter"
+                    >
+                      <Zap className="w-4 h-4 fill-slate-950" />
+                      <span>Test Live Join</span>
+                    </button>
+                    {onNavigateToCheckIn && (
+                      <button
+                        type="button"
+                        onClick={onNavigateToCheckIn}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs border border-white/20 transition-all cursor-pointer"
+                      >
+                        <ScanLine className="w-4 h-4 text-emerald-400" />
+                        <span>Launch Camera Scanner</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Big Live KPI Metric Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* 1. PEOPLE JOINED */}
+                <div className="bg-white rounded-[20px] border-2 border-emerald-500/30 p-5 shadow-xs relative overflow-hidden">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-500 mb-1">
+                    <span className="flex items-center gap-1.5 text-emerald-700">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      PEOPLE JOINED
+                    </span>
+                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-extrabold border border-emerald-200">
+                      {attendedPercent}% of registered
+                    </span>
+                  </div>
+                  <div className="text-4xl sm:text-5xl font-black text-emerald-600 leading-tight tracking-tight tabular-nums flex items-baseline gap-2">
+                    <span>{stats.attended}</span>
+                    <span className="text-sm font-bold text-slate-500">students</span>
+                  </div>
+                  <div className="text-xs text-slate-600 mt-2 font-medium flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Verified gate admissions</span>
+                  </div>
+                </div>
+
+                {/* 2. TOTAL REGISTERED */}
+                <div className="bg-white rounded-[20px] border border-slate-200 p-5 shadow-xs">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-500 mb-1">
+                    <span>TOTAL REGISTERED</span>
+                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-extrabold border border-indigo-200">
+                      {registeredPercent}% filled
+                    </span>
+                  </div>
+                  <div className="text-4xl sm:text-5xl font-black text-slate-900 leading-tight tracking-tight tabular-nums flex items-baseline gap-2">
+                    <span>{stats.registered}</span>
+                    <span className="text-sm font-bold text-slate-500">/ {stats.capacity}</span>
+                  </div>
+                  <div className="text-xs text-slate-600 mt-2 font-medium">
+                    <span>{Math.max(0, stats.registered - stats.attended)} pending arrival</span>
+                  </div>
+                </div>
+
+                {/* 3. SEATS REMAINING */}
+                <div className="bg-white rounded-[20px] border border-slate-200 p-5 shadow-xs">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-500 mb-1">
+                    <span>SEATS REMAINING</span>
+                    <span className="text-[11px] text-slate-500">Available</span>
+                  </div>
+                  <div className="text-4xl sm:text-5xl font-black text-indigo-600 leading-tight tracking-tight tabular-nums flex items-baseline gap-2">
+                    <span>{stats.remaining}</span>
+                    <span className="text-sm font-bold text-slate-500">seats</span>
+                  </div>
+                  <div className="text-xs text-slate-600 mt-2 font-medium">
+                    {stats.remaining > 0 ? 'Accepting student registrations' : 'Capacity maxed out'}
+                  </div>
+                </div>
+
+                {/* 4. VENUE OCCUPANCY METER */}
+                <div className="bg-white rounded-[20px] border border-slate-200 p-5 shadow-xs">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-500 mb-1">
+                    <span>VENUE OCCUPANCY</span>
+                    <span className="text-[11px] text-slate-500">Hall Capacity</span>
+                  </div>
+                  <div className="text-4xl sm:text-5xl font-black text-slate-900 leading-tight tracking-tight tabular-nums flex items-baseline gap-2">
+                    <span>{stats.capacity > 0 ? Math.round((stats.attended / stats.capacity) * 100) : 0}%</span>
+                    <span className="text-sm font-bold text-slate-500">occupied</span>
+                  </div>
+                  <div className="text-xs text-slate-600 mt-2 font-medium">
+                    {stats.attended >= stats.capacity ? 'Full venue capacity' : `${Math.max(0, stats.capacity - stats.attended)} chairs vacant`}
+                  </div>
+                </div>
+              </div>
+
+              {/* Live Attendance Flow Gauge Bar */}
+              <div className="bg-white rounded-[20px] border border-slate-200 p-5 sm:p-6 shadow-xs space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs font-bold">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-emerald-600" />
+                    <span className="text-slate-900 text-sm">Real-Time Hall Capacity Distribution</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-4 text-xs font-semibold">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-full bg-emerald-500" />
+                      <span>{stats.attended} Joined & Checked In</span>
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-full bg-indigo-500" />
+                      <span>{Math.max(0, stats.registered - stats.attended)} Registered (En route)</span>
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-full bg-slate-200" />
+                      <span>{stats.remaining} Empty Capacity</span>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Multi-segment Progress Bar */}
+                <div className="w-full bg-slate-100 h-4 rounded-full overflow-hidden flex border border-slate-200">
+                  <div
+                    className="bg-emerald-500 h-full transition-all duration-500 relative"
+                    style={{
+                      width: `${stats.capacity > 0 ? Math.min(100, (stats.attended / stats.capacity) * 100) : 0}%`,
+                    }}
+                    title={`${stats.attended} people joined`}
+                  />
+                  <div
+                    className="bg-indigo-500 h-full transition-all duration-500 relative"
+                    style={{
+                      width: `${
+                        stats.capacity > 0
+                          ? Math.min(
+                              100,
+                              (Math.max(0, stats.registered - stats.attended) / stats.capacity) * 100
+                            )
+                          : 0
+                      }%`,
+                    }}
+                    title={`${stats.registered - stats.attended} registered not yet checked in`}
+                  />
+                </div>
+              </div>
+
+              {/* Split Layout: Live Quick Desk & Recent Joins Feed */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Left (1 col): Fast Gate Pass Check-In */}
+                <div className="bg-white rounded-[20px] border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <ScanLine className="w-5 h-5 text-indigo-600" />
+                      <h4 className="font-extrabold text-slate-900 text-sm sm:text-base">
+                        Fast Gate Pass Entry
+                      </h4>
+                    </div>
+                    <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-bold border border-emerald-200">
+                      Live Gate Active
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Type or paste attendee ticket pass code (e.g. <span className="font-mono font-semibold text-slate-700">EVT1-TK9A2B</span>) to verify gate entry immediately.
+                  </p>
+
+                  <form onSubmit={handleQuickDeskCheckIn} className="space-y-3">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={deskCodeInput}
+                        onChange={(e) => setDeskCodeInput(e.target.value)}
+                        placeholder="EVT... (e.g. EVT1-TK9A2B)"
+                        className="w-full uppercase font-mono tracking-wider font-extrabold text-sm pl-3.5 pr-20 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-colors"
+                      />
+                      <button
+                        type="submit"
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                      >
+                        Verify
+                      </button>
+                    </div>
+
+                    {deskFeedbackMessage && (
+                      <div
+                        className={`p-3 rounded-xl border text-xs space-y-1 animate-in fade-in ${
+                          deskFeedbackMessage.type === 'success'
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                            : deskFeedbackMessage.type === 'duplicate'
+                            ? 'bg-amber-50 border-amber-200 text-amber-900'
+                            : 'bg-red-50 border-red-200 text-red-900'
+                        }`}
+                      >
+                        <div className="font-bold flex items-center gap-1.5">
+                          {deskFeedbackMessage.type === 'success' ? (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          ) : (
+                            <AlertCircle className="w-4 h-4 text-amber-600" />
+                          )}
+                          <span>{deskFeedbackMessage.text}</span>
+                        </div>
+                        {deskFeedbackMessage.name && (
+                          <div className="font-semibold">{deskFeedbackMessage.name}</div>
+                        )}
+                        {deskFeedbackMessage.time && (
+                          <div className="text-[11px] text-slate-500 font-mono">
+                            Time: {deskFeedbackMessage.time}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </form>
+
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                    <span>Audio sound:</span>
+                    <span className="font-semibold text-emerald-600 flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                      Chime enabled on scan
+                    </span>
+                  </div>
+                </div>
+
+                {/* Right (2 cols): People Joined Live Activity Feed */}
+                <div className="lg:col-span-2 bg-white rounded-[20px] border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+                    <div>
+                      <h4 className="font-extrabold text-slate-900 text-base sm:text-lg flex items-center gap-2">
+                        <Activity className="w-5 h-5 text-emerald-600" />
+                        <span>Live Joined Attendee Feed ({checkedInParticipants.length} people joined)</span>
+                      </h4>
+                      <p className="text-xs text-slate-500">
+                        Real-time stream of verified gate check-ins with college and ticket information
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700">
+                        <Users className="w-3.5 h-3.5 text-slate-500" />
+                        <span>{checkedInParticipants.length} in hall</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* List of checked in attendees */}
+                  {checkedInParticipants.length > 0 ? (
+                    <div className="space-y-2.5 max-h-[460px] overflow-y-auto pr-1">
+                      {checkedInParticipants.map((p, idx) => {
+                        const checkInTime = p.checkedInAt
+                          ? new Date(p.checkedInAt).toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              second: '2-digit',
+                            })
+                          : 'Just now';
+
+                        return (
+                          <div
+                            key={p.code}
+                            className="p-3.5 rounded-xl border border-slate-200/90 hover:border-emerald-300 bg-slate-50/50 hover:bg-white transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                          >
+                            <div className="flex items-center gap-3">
+                              {/* Avatar circle */}
+                              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-teal-700 text-white font-extrabold text-sm flex items-center justify-center shrink-0 shadow-xs">
+                                {p.name.charAt(0).toUpperCase()}
+                              </div>
+                              <div className="space-y-0.5">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-extrabold text-slate-900 text-sm">
+                                    {p.name}
+                                  </span>
+                                  {idx === 0 && (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500 text-white uppercase tracking-wider animate-pulse">
+                                      Latest Join
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-slate-500 flex flex-wrap items-center gap-2">
+                                  {p.collegeName && (
+                                    <span className="font-medium text-slate-700">
+                                      {p.collegeName}
+                                    </span>
+                                  )}
+                                  {p.branch && (
+                                    <>
+                                      <span className="text-slate-300">·</span>
+                                      <span className="text-slate-500">{p.branch}</span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-3 self-end sm:self-center">
+                              <div className="text-right">
+                                <div className="font-mono text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200/60">
+                                  {p.code}
+                                </div>
+                                <div className="text-[11px] text-slate-500 mt-0.5 flex items-center justify-end gap-1">
+                                  <Clock className="w-3 h-3 text-slate-400" />
+                                  <span>{checkInTime}</span>
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => handleToggleCheckIn(p.code, true, p.name)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                                title="Undo check-in"
+                              >
+                                <RotateCcw className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 px-4 rounded-xl border border-dashed border-slate-200 bg-slate-50">
+                      <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-3">
+                        <Users className="w-6 h-6" />
+                      </div>
+                      <h5 className="font-bold text-slate-900 text-sm">
+                        No attendees have joined the hall yet
+                      </h5>
+                      <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-4">
+                        When attendees scan their QR passes or check in at the desk, they will instantly appear in this live stream!
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleSimulateLiveJoin}
+                        className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-colors cursor-pointer"
+                      >
+                        <Zap className="w-3.5 h-3.5" />
+                        <span>Simulate First Student Arrival</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* TAB 1: ATTENDEE ROSTER DIRECTORY */}
           {activeTab === 'roster' && (
@@ -1956,6 +2395,135 @@ export function OrganizerView({
           isOpen={isAddFeedbackModalOpen}
           onClose={() => setIsAddFeedbackModalOpen(false)}
         />
+      )}
+
+      {/* ALL EVENTS OVERVIEW MODAL */}
+      {isAllEventsModalOpen && (
+        <div className="fixed inset-0 z-50 bg-[#0E1424]/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl bg-white rounded-[24px] border border-slate-200 shadow-2xl p-6 sm:p-7 space-y-5 max-h-[85vh] flex flex-col animate-fadeIn">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                  <Layers className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">
+                    All College Events ({events.length})
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Select an event to view analytics, gate live tracking, and participant roster.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAllEventsModalOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+              {events.map((ev) => {
+                const isSelected = ev.id === selectedEventId;
+                const evStats = getStats(ev.id);
+                return (
+                  <div
+                    key={ev.id}
+                    onClick={() => {
+                      onSelectEventId(ev.id);
+                      setIsAllEventsModalOpen(false);
+                      showToast(`Switched to '${ev.name}'`);
+                    }}
+                    className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                      isSelected
+                        ? 'border-indigo-600 bg-indigo-50/50 shadow-xs ring-2 ring-indigo-600/10'
+                        : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3.5">
+                      <div className="w-14 h-14 rounded-xl overflow-hidden shrink-0 relative border border-slate-200">
+                        <EventBannerImage
+                          src={ev.bannerUrl}
+                          category={ev.category}
+                          alt={ev.name}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-extrabold text-slate-900 text-sm sm:text-base">
+                            {ev.name}
+                          </h4>
+                          {isSelected && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-600 text-white uppercase tracking-wider">
+                              Active
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-500 flex flex-wrap items-center gap-2">
+                          <span>{ev.date}</span>
+                          <span>·</span>
+                          <span>{ev.venue}</span>
+                        </div>
+                        <div className="text-xs font-semibold text-slate-600 flex items-center gap-3 pt-0.5">
+                          <span className="text-indigo-600">
+                            {evStats.registered} / {ev.capacity} registered
+                          </span>
+                          <span>·</span>
+                          <span className="text-emerald-600 font-bold">
+                            {evStats.attended} joined
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 self-end sm:self-center">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectEventId(ev.id);
+                          setIsAllEventsModalOpen(false);
+                        }}
+                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                          isSelected
+                            ? 'bg-indigo-600 text-white'
+                            : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        {isSelected ? 'Currently Viewing' : 'Select'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAllEventsModalOpen(false);
+                  handleOpenPanel();
+                }}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors cursor-pointer shadow-xs"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create Another Event</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsAllEventsModalOpen(false)}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* SOCIAL & EMAIL SHARE MODAL */}

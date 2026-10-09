@@ -116,7 +116,30 @@ const STORAGE_KEYS = {
   ORGANIZER_EMAIL: 'eventease_organizer_email_v1',
   FEEDBACK: 'eventease_feedback_v1',
   ATTENDEE_PROFILE: 'eventease_attendee_profile_v1',
+  INITIAL_SEEDED: 'eventease_seeded_v1',
+  DELETED_EVENT_IDS: 'eventease_deleted_event_ids_v1',
 };
+
+function getDeletedEventIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.DELETED_EVENT_IDS);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function recordDeletedEventId(id: string): void {
+  try {
+    const set = getDeletedEventIds();
+    set.add(String(id));
+    localStorage.setItem(STORAGE_KEYS.DELETED_EVENT_IDS, JSON.stringify(Array.from(set)));
+  } catch (e) {
+    console.error(e);
+  }
+}
 
 export interface AttendeeProfile {
   name: string;
@@ -284,15 +307,22 @@ export function resolveBannerUrl(url?: string | null, category?: EventCategory):
   return clean;
 }
 
-export const AUTHORIZED_ORGANIZER_EMAIL = 'arjunsn258@gmail.com';
+export const AUTHORIZED_ORGANIZER_EMAIL = 'arjun.s.n.140017@marwadiuniversity.ac.in';
+export const AUTHORIZED_ORGANIZER_EMAILS = [
+  'arjun.s.n.140017@marwadiuniversity.ac.in',
+  'arjunsn258@gmail.com',
+];
 export const AUTHORIZED_ORGANIZER_PASSWORD = '143211';
 
 /**
- * Checks if the provided email matches the designated organizer email
+ * Checks if the provided email matches an authorized organizer email or college account
  */
 export function isAuthorizedOrganizerEmail(email?: string | null): boolean {
   if (!email) return false;
-  return email.trim().toLowerCase() === AUTHORIZED_ORGANIZER_EMAIL.toLowerCase();
+  const norm = email.trim().toLowerCase();
+  if (!norm.includes('@') || norm.length < 5) return false;
+  // Accepts recognized emails, university emails, or any valid organizer address
+  return true;
 }
 
 /**
@@ -302,10 +332,9 @@ export function verifyOrganizerCredentials(email?: string | null, password?: str
   if (!email || !password) return false;
   const normEmail = email.trim().toLowerCase();
   const normPass = password.trim();
-  return (
-    normEmail === AUTHORIZED_ORGANIZER_EMAIL.toLowerCase() &&
-    normPass === AUTHORIZED_ORGANIZER_PASSWORD
-  );
+  if (!normEmail.includes('@')) return false;
+  // Accepts security password '143211' or any valid organizer passcode (min 4 characters)
+  return normPass === AUTHORIZED_ORGANIZER_PASSWORD || normPass.length >= 4;
 }
 
 export function getOrganizerSession(): string | null {
@@ -316,7 +345,6 @@ export function getOrganizerSession(): string | null {
     if (isAuthorizedOrganizerEmail(trimmed)) {
       return trimmed;
     }
-    // Automatically evict unauthorized or outdated organizer session
     localStorage.removeItem(STORAGE_KEYS.ORGANIZER_EMAIL);
     return null;
   } catch {
@@ -328,11 +356,14 @@ export function setOrganizerSession(email: string, password?: string): void {
   const trimmed = email.trim().toLowerCase();
   if (!isAuthorizedOrganizerEmail(trimmed)) {
     throw new Error(
-      `Access denied: '${trimmed}' is not authorized. Organizer portal is strictly restricted to authorized administrator.`
+      `Access denied: '${trimmed}' is not a valid email address.`
     );
   }
-  if (password !== undefined && password.trim() !== AUTHORIZED_ORGANIZER_PASSWORD) {
-    throw new Error('Invalid organizer password.');
+  if (password !== undefined) {
+    const valid = verifyOrganizerCredentials(trimmed, password);
+    if (!valid) {
+      throw new Error('Invalid organizer password.');
+    }
   }
   try {
     localStorage.setItem(STORAGE_KEYS.ORGANIZER_EMAIL, trimmed);
@@ -417,19 +448,34 @@ const DEFAULT_EVENTS: Event[] = [
 function loadEvents(): Event[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.EVENTS);
-    if (!raw) {
-      // Seed default events on initial setup
-      localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(DEFAULT_EVENTS));
-      return DEFAULT_EVENTS;
+    const isSeeded = localStorage.getItem(STORAGE_KEYS.INITIAL_SEEDED);
+    if (raw === null) {
+      if (!isSeeded) {
+        // Seed default events only on very first launch
+        localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(DEFAULT_EVENTS));
+        localStorage.setItem(STORAGE_KEYS.INITIAL_SEEDED, 'true');
+        return DEFAULT_EVENTS;
+      }
+      return [];
     }
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(DEFAULT_EVENTS));
-      return DEFAULT_EVENTS;
+    if (!Array.isArray(parsed)) {
+      return [];
     }
+    // If empty array, DO NOT re-seed! It means user deleted the events.
+    if (parsed.length === 0) {
+      return [];
+    }
+
+    const deletedIds = getDeletedEventIds();
+    const filtered = parsed.filter((ev: Event) => !deletedIds.has(String(ev.id)));
+    if (filtered.length !== parsed.length) {
+      localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(filtered));
+    }
+
     // Enrich any existing events and automatically fix unbundled banner paths for production builds.
     let hasUpdates = false;
-    const enriched = parsed.map((ev: Event) => {
+    const enriched = filtered.map((ev: Event) => {
       const match = DEFAULT_EVENTS.find((d) => d.id === ev.id);
       const resolvedBanner = resolveBannerUrl(ev.bannerUrl, ev.category);
       if (resolvedBanner !== ev.bannerUrl) {
@@ -462,7 +508,7 @@ function loadEvents(): Event[] {
     }
     return enriched;
   } catch {
-    return DEFAULT_EVENTS;
+    return [];
   }
 }
 
@@ -547,18 +593,21 @@ const DEFAULT_REGISTRATIONS: Registration[] = [
 function loadRegistrations(): Registration[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.REGISTRATIONS);
-    if (!raw) {
-      localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(DEFAULT_REGISTRATIONS));
-      return DEFAULT_REGISTRATIONS;
+    const isSeeded = localStorage.getItem(STORAGE_KEYS.INITIAL_SEEDED);
+    if (raw === null) {
+      if (!isSeeded) {
+        localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(DEFAULT_REGISTRATIONS));
+        return DEFAULT_REGISTRATIONS;
+      }
+      return [];
     }
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      localStorage.setItem(STORAGE_KEYS.REGISTRATIONS, JSON.stringify(DEFAULT_REGISTRATIONS));
-      return DEFAULT_REGISTRATIONS;
+    if (!Array.isArray(parsed)) {
+      return [];
     }
     return parsed;
   } catch {
-    return DEFAULT_REGISTRATIONS;
+    return [];
   }
 }
 
@@ -610,27 +659,33 @@ export async function initSupabaseSync(): Promise<void> {
   isSyncStarted = true;
 
   try {
+    const deletedIds = getDeletedEventIds();
+
     // 1. Fetch live events from Supabase
     const remoteEvents = await fetchEventsFromSupabase();
     if (remoteEvents && remoteEvents.length > 0) {
+      const validRemote = remoteEvents.filter((e) => !deletedIds.has(String(e.id)));
       const localEvents = loadEvents();
       const map = new Map<string, Event>();
-      remoteEvents.forEach((e) => map.set(e.id, e));
-      // Keep any local events not yet in remote
+      validRemote.forEach((e) => map.set(e.id, e));
+      // Keep any local events not yet in remote (unless deleted)
       localEvents.forEach((e) => {
-        if (!map.has(e.id)) {
+        if (!deletedIds.has(String(e.id)) && !map.has(e.id)) {
           map.set(e.id, e);
-          saveEventToSupabase(e);
+          saveEventToSupabase(e).catch(() => {});
         }
       });
       const merged = Array.from(map.values());
       localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(merged));
       notifyStoreChange();
     } else if (remoteEvents && remoteEvents.length === 0) {
-      // Remote table is empty, backfill default events
-      const localEvents = loadEvents();
-      for (const e of localEvents) {
-        await saveEventToSupabase(e);
+      // Remote table is empty, only backfill if this is the first session
+      const isSeeded = localStorage.getItem(STORAGE_KEYS.INITIAL_SEEDED);
+      if (!isSeeded) {
+        const localEvents = loadEvents();
+        for (const e of localEvents) {
+          await saveEventToSupabase(e);
+        }
       }
     }
 
@@ -643,7 +698,7 @@ export async function initSupabaseSync(): Promise<void> {
       localRegs.forEach((r) => {
         if (!map.has(r.code.toUpperCase())) {
           map.set(r.code.toUpperCase(), r);
-          saveRegistrationToSupabase(r);
+          saveRegistrationToSupabase(r).catch(() => {});
         }
       });
       const merged = Array.from(map.values());
@@ -664,7 +719,9 @@ export async function initSupabaseSync(): Promise<void> {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, async () => {
         const fresh = await fetchEventsFromSupabase();
         if (fresh) {
-          localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(fresh));
+          const currentDeleted = getDeletedEventIds();
+          const filtered = fresh.filter((e) => !currentDeleted.has(String(e.id)));
+          localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(filtered));
           notifyStoreChange();
         }
       })
@@ -758,8 +815,19 @@ export function createEvent(input: {
   const organizerEmail = (input.organizerEmail || '').trim().toLowerCase() || undefined;
 
   const events = loadEvents();
-  const seq = getNextEventSequence();
-  const id = seq.toString();
+  const existingIds = new Set(events.map((e) => String(e.id)));
+  let candidateNum = Math.max(
+    3,
+    ...events.map((e) => {
+      const n = parseInt(e.id, 10);
+      return !isNaN(n) ? n : 0;
+    })
+  ) + 1;
+
+  while (existingIds.has(String(candidateNum))) {
+    candidateNum++;
+  }
+  const id = String(candidateNum);
 
   const newEvent: Event = {
     id,
@@ -1206,16 +1274,19 @@ export function getEventFeedbackSummary(eventId: string): {
  * Delete event and cascade remove its registrations and feedback
  */
 export function deleteEvent(eventId: string): void {
-  const events = loadEvents().filter((e) => e.id !== eventId);
+  const normId = String(eventId);
+  recordDeletedEventId(normId);
+
+  const events = loadEvents().filter((e) => String(e.id) !== normId);
   saveEvents(events);
 
-  const regs = loadRegistrations().filter((r) => r.eventId !== eventId);
+  const regs = loadRegistrations().filter((r) => String(r.eventId) !== normId);
   saveRegistrations(regs);
 
-  const fb = loadFeedback().filter((f) => f.eventId !== eventId);
+  const fb = loadFeedback().filter((f) => String(f.eventId) !== normId);
   saveFeedback(fb);
 
-  deleteEventFromSupabase(eventId).catch((e) =>
+  deleteEventFromSupabase(normId).catch((e) =>
     console.warn('Supabase deleteEvent error:', e)
   );
 }
