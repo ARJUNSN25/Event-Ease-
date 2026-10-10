@@ -184,11 +184,19 @@ export function CheckInView({
 
   // Camera State
   const [isCameraActive, setIsCameraActive] = useState(false);
-  const [cameraFacingMode, setCameraFacingMode] = useState<'environment' | 'user'>('environment');
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isStartingCamera, setIsStartingCamera] = useState(false);
-  const scannerRef = useRef<Html5Qrcode | null>(null);
-  const isScanningActiveRef = useRef<boolean>(false);
+  const [cameraLabel, setCameraLabel] = useState<string>('Laptop Webcam');
+  const [currentDeviceId, setCurrentDeviceId] = useState<string | null>(null);
+  const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
+
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const isStartingLockRef = useRef<boolean>(false);
+  const scanIntervalRef = useRef<number | null>(null);
+  const isScanningFrameRef = useRef<boolean>(false);
+  const barcodeDetectorRef = useRef<any>(null);
+  const scanCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // File Upload State
   const [isDraggingFile, setIsDraggingFile] = useState(false);
@@ -369,75 +377,271 @@ export function CheckInView({
     [processCode]
   );
 
-  // Start Camera
-  const startCamera = async (targetFacing: 'environment' | 'user' = cameraFacingMode) => {
-    setCameraError(null);
+  // Start continuous QR scanner loop from live video feed
+  const startScanLoop = useCallback(() => {
+    if (scanIntervalRef.current) {
+      window.clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
+
+    scanIntervalRef.current = window.setInterval(async () => {
+      const video = videoRef.current;
+      if (!video || video.readyState < 2 || video.paused || isScanningFrameRef.current) {
+        return;
+      }
+
+      isScanningFrameRef.current = true;
+      try {
+        // Native BarcodeDetector (instant GPU acceleration in modern Chrome/Edge)
+        if (typeof window !== 'undefined' && 'BarcodeDetector' in window) {
+          try {
+            if (!barcodeDetectorRef.current) {
+              const BD = (window as any).BarcodeDetector;
+              barcodeDetectorRef.current = new BD({ formats: ['qr_code'] });
+            }
+            const detections = await barcodeDetectorRef.current.detect(video);
+            if (detections && detections.length > 0 && detections[0].rawValue) {
+              handleScanSuccess(detections[0].rawValue);
+              return;
+            }
+          } catch {
+            // Ignore single frame detect error
+          }
+        }
+
+        // Fallback: draw frame onto offscreen canvas and decode via image decoder
+        if (video.videoWidth > 0 && video.videoHeight > 0) {
+          if (!scanCanvasRef.current) {
+            scanCanvasRef.current = document.createElement('canvas');
+          }
+          const canvas = scanCanvasRef.current;
+          const targetWidth = Math.min(video.videoWidth, 480);
+          const targetHeight = Math.min(video.videoHeight, 480);
+          if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+            canvas.width = targetWidth;
+            canvas.height = targetHeight;
+          }
+          const ctx = canvas.getContext('2d', { willReadFrequently: true });
+          if (ctx) {
+            ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
+            canvas.toBlob(
+              async (blob) => {
+                if (blob) {
+                  try {
+                    const file = new File([blob], 'frame.jpg', { type: 'image/jpeg' });
+                    const code = await decodeQrFromImageFile(file);
+                    if (code) {
+                      handleScanSuccess(code);
+                    }
+                  } catch {
+                    // Frame had no readable QR code
+                  }
+                }
+              },
+              'image/jpeg',
+              0.8
+            );
+          }
+        }
+      } catch {
+        // Ignore frame error
+      } finally {
+        isScanningFrameRef.current = false;
+      }
+    }, 250);
+  }, [handleScanSuccess]);
+
+  // Stop Camera & release all media tracks (Requirement 5)
+  const stopCamera = useCallback(() => {
+    if (scanIntervalRef.current) {
+      window.clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
+    isScanningFrameRef.current = false;
+
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch (e) {
+          console.warn('Track stop warning:', e);
+        }
+      });
+      mediaStreamRef.current = null;
+    }
+
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+
+    setIsCameraActive(false);
+    setIsStartingCamera(false);
+    isStartingLockRef.current = false;
+  }, []);
+
+  // Start Camera (Requirements 1, 2, 3, 4, 8, 9)
+  const startCamera = async (targetDeviceId?: string) => {
+    // Requirement 9: Prevent multiple camera streams from opening simultaneously
+    if (isStartingLockRef.current || isStartingCamera) {
+      return;
+    }
+    isStartingLockRef.current = true;
     setIsStartingCamera(true);
+    setCameraError(null);
+
+    // Stop any previously running stream
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch {
+          // Ignore
+        }
+      });
+      mediaStreamRef.current = null;
+    }
+    if (scanIntervalRef.current) {
+      window.clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
+
+    // Requirement 8: Check for insecure connection and browser support
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      const isInsecure =
+        typeof window !== 'undefined' &&
+        window.location.protocol !== 'https:' &&
+        window.location.hostname !== 'localhost' &&
+        window.location.hostname !== '127.0.0.1';
+
+      const errorMsg = isInsecure
+        ? 'Insecure connection: Camera access is blocked by browsers over HTTP. Please use HTTPS or localhost.'
+        : 'Camera not supported: The MediaDevices API is not available in this browser. Please use a modern browser or "Upload Pass Image".';
+      setCameraError(errorMsg);
+      setIsStartingCamera(false);
+      isStartingLockRef.current = false;
+      return;
+    }
 
     try {
-      if (scannerRef.current && isScanningActiveRef.current) {
-        await scannerRef.current.stop();
-        scannerRef.current.clear();
-      }
+      // Requirement 1: Use navigator.mediaDevices.getUserMedia() to access the laptop webcam.
+      // Use video: true as default instead of forcing facingMode: "environment".
+      const constraints: MediaStreamConstraints = {
+        video: targetDeviceId ? { deviceId: { exact: targetDeviceId } } : true,
+        audio: false,
+      };
 
-      const qrScanner = new Html5Qrcode('qr-reader');
-      scannerRef.current = qrScanner;
-
-      await qrScanner.start(
-        { facingMode: targetFacing },
-        {
-          fps: 12,
-          qrbox: { width: 220, height: 220 },
-          aspectRatio: 1.0,
-        },
-        (decodedText) => {
-          handleScanSuccess(decodedText);
-        },
-        () => {
-          // Frame parse error - ignore
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (subErr: any) {
+        // If exact targetDeviceId failed or was overconstrained, fallback to video: true
+        if (targetDeviceId && (subErr.name === 'OverconstrainedError' || subErr.name === 'ConstraintNotSatisfiedError')) {
+          console.warn('Target camera overconstrained, falling back to video: true');
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        } else {
+          throw subErr;
         }
-      );
-
-      isScanningActiveRef.current = true;
-      setIsCameraActive(true);
-      showToast('Camera scanner started.');
-    } catch (err: unknown) {
-      console.warn('Camera error:', err);
-      let message = 'Could not access camera. Try uploading the pass image or using manual code entry.';
-      if (err instanceof Error && err.name === 'NotAllowedError') {
-        message = 'Camera permission was denied. You can upload the QR ticket image or enter the code below.';
-      } else if (err instanceof Error && err.name === 'NotFoundError') {
-        message = 'No camera detected on this device. Switch to "Upload Pass Image" above.';
       }
+
+      mediaStreamRef.current = stream;
+
+      // Requirement 2: Attach the returned stream using videoRef.current.srcObject = stream
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        // Requirement 3: Ensure video element has autoPlay, playsInline, and muted enabled
+        videoRef.current.muted = true;
+        videoRef.current.playsInline = true;
+        videoRef.current.autoplay = true;
+
+        // Requirement 4: Call video.play() after attaching stream and handle playback errors
+        try {
+          await videoRef.current.play();
+        } catch (playErr) {
+          console.warn('Video play error (handled):', playErr);
+        }
+      }
+
+      // Query available video devices for Flip Camera support
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoInputs = devices.filter((d) => d.kind === 'videoinput');
+        setAvailableCameras(videoInputs);
+
+        const currentTrack = stream.getVideoTracks()[0];
+        if (currentTrack) {
+          const settings = currentTrack.getSettings?.();
+          const activeDeviceId = settings?.deviceId || targetDeviceId || (videoInputs[0]?.deviceId ?? null);
+          setCurrentDeviceId(activeDeviceId);
+
+          const trackLabel = currentTrack.label || '';
+          if (trackLabel) {
+            setCameraLabel(trackLabel);
+          } else if (videoInputs.length > 1) {
+            setCameraLabel(`Camera 1 of ${videoInputs.length}`);
+          } else {
+            setCameraLabel('Laptop Webcam');
+          }
+        }
+      } catch {
+        // Ignore device enumeration issues
+      }
+
+      setIsCameraActive(true);
+      showToast('Camera started successfully.');
+
+      // Start continuous scanning loop for QR passes
+      startScanLoop();
+    } catch (err: any) {
+      console.warn('Camera access failed:', err);
+      // Requirement 8: Clear, user-friendly error messages
+      let message = 'Could not access camera. Please check permissions or use "Upload Pass Image".';
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        message = 'Camera permission denied: Please allow camera access in your browser site permissions and click Start Camera again.';
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        message = 'No camera found: No video input device was detected on this laptop. Please connect a webcam or use "Upload Pass Image".';
+      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+        message = 'Camera already in use: Another application (Zoom, Teams, etc.) or browser tab is using your webcam. Please close it and retry.';
+      } else if (err.name === 'OverconstrainedError') {
+        message = 'Camera resolution or constraint not supported by your device.';
+      } else if (err.name === 'SecurityError') {
+        message = 'Insecure connection: Camera access blocked due to security settings.';
+      }
+
       setCameraError(message);
       setIsCameraActive(false);
-      isScanningActiveRef.current = false;
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+        mediaStreamRef.current = null;
+      }
     } finally {
       setIsStartingCamera(false);
+      isStartingLockRef.current = false;
     }
   };
 
-  // Stop Camera
-  const stopCamera = async () => {
-    if (scannerRef.current && isScanningActiveRef.current) {
-      try {
-        await scannerRef.current.stop();
-        scannerRef.current.clear();
-      } catch (err) {
-        console.warn('Error stopping camera:', err);
-      }
-    }
-    isScanningActiveRef.current = false;
-    setIsCameraActive(false);
-  };
-
-  // Flip camera between Rear (environment) and Front (user)
+  // Requirement 7: Flip Camera safely; if no alternative exists on laptop, display helpful message
   const toggleCameraFacing = async () => {
-    const nextFacing = cameraFacingMode === 'environment' ? 'user' : 'environment';
-    setCameraFacingMode(nextFacing);
-    if (isCameraActive) {
-      await stopCamera();
-      await startCamera(nextFacing);
+    if (isStartingCamera || isStartingLockRef.current) return;
+
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoInputs = devices.filter((d) => d.kind === 'videoinput');
+      setAvailableCameras(videoInputs);
+
+      if (videoInputs.length <= 1) {
+        showToast('Only 1 camera detected on this laptop. No alternative camera available to flip to.', 'info');
+        return;
+      }
+
+      const currentIndex = videoInputs.findIndex((d) => d.deviceId === currentDeviceId);
+      const nextIndex = (currentIndex + 1) % videoInputs.length;
+      const nextDevice = videoInputs[nextIndex];
+
+      showToast(`Switching camera to: ${nextDevice.label || `Camera ${nextIndex + 1}`}...`, 'info');
+      await startCamera(nextDevice.deviceId);
+    } catch (err) {
+      console.warn('Failed to switch camera:', err);
+      showToast('Could not flip camera.', 'warning');
     }
   };
 
@@ -445,7 +649,7 @@ export function CheckInView({
   const handleSelectMode = async (mode: ScanMode) => {
     setScanMode(mode);
     if (mode !== 'camera' && isCameraActive) {
-      await stopCamera();
+      stopCamera();
     }
   };
 
@@ -530,14 +734,28 @@ export function CheckInView({
     return () => window.removeEventListener('paste', handlePaste);
   }, []);
 
-  // Clean up camera and timer on unmount
+  // Clean up camera, scan loop, and timer on unmount (Requirement 5)
   useEffect(() => {
     return () => {
       if (resetTimerRef.current) {
         window.clearTimeout(resetTimerRef.current);
       }
-      if (scannerRef.current && isScanningActiveRef.current) {
-        scannerRef.current.stop().catch(() => {});
+      if (scanIntervalRef.current) {
+        window.clearInterval(scanIntervalRef.current);
+        scanIntervalRef.current = null;
+      }
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((track) => {
+          try {
+            track.stop();
+          } catch {
+            // Ignore
+          }
+        });
+        mediaStreamRef.current = null;
+      }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
       }
     };
   }, []);
@@ -770,19 +988,17 @@ export function CheckInView({
           {scanMode === 'camera' && (
             <div className="bg-[#0E1424] text-white rounded-[14px] p-4 space-y-4">
               <div className="flex items-center justify-between text-xs text-white/80">
-                <span className="flex items-center gap-1.5">
-                  <Smartphone className="w-3.5 h-3.5 text-[#3345E8]" />
-                  <span>
-                    {cameraFacingMode === 'environment' ? 'Rear Camera' : 'Front Selfie Camera'}
-                  </span>
+                <span className="flex items-center gap-1.5 truncate max-w-[200px] sm:max-w-xs">
+                  <Smartphone className="w-3.5 h-3.5 text-[#3345E8] shrink-0" />
+                  <span className="truncate">{cameraLabel}</span>
                 </span>
 
                 {isCameraActive && (
                   <button
                     type="button"
                     onClick={toggleCameraFacing}
-                    className="inline-flex items-center gap-1 text-xs text-white/80 hover:text-white px-2 py-1 rounded bg-white/10 hover:bg-white/20 transition-colors"
-                    title="Switch between front and back camera"
+                    className="inline-flex items-center gap-1 text-xs text-white/80 hover:text-white px-2 py-1 rounded bg-white/10 hover:bg-white/20 transition-colors cursor-pointer"
+                    title="Switch camera device"
                   >
                     <FlipHorizontal className="w-3 h-3" />
                     <span>Flip Camera</span>
@@ -791,15 +1007,20 @@ export function CheckInView({
               </div>
 
               {/* Viewport with viewfinder */}
-              <div className="relative aspect-square max-h-[300px] sm:max-h-[320px] w-full bg-black/80 rounded-[12px] overflow-hidden border border-white/10 flex items-center justify-center">
-                {/* HTML5 QR Container */}
-                <div
-                  id="qr-reader"
-                  className={`w-full h-full ${isCameraActive ? 'block' : 'hidden'}`}
+              <div className="relative aspect-square max-h-[300px] sm:max-h-[320px] w-full bg-black rounded-[12px] overflow-hidden border border-white/10 flex items-center justify-center">
+                {/* Live Video Element attached to MediaStream (Requirements 2, 3, 6) */}
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className={`absolute inset-0 w-full h-full object-cover z-0 ${
+                    isCameraActive ? 'block' : 'hidden'
+                  }`}
                 />
 
                 {!isCameraActive && (
-                  <div className="flex flex-col items-center justify-center p-6 text-center text-white/70">
+                  <div className="relative z-10 flex flex-col items-center justify-center p-6 text-center text-white/70">
                     <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center mb-3 text-white">
                       <Camera className="w-8 h-8" />
                     </div>
@@ -813,7 +1034,7 @@ export function CheckInView({
                       type="button"
                       onClick={() => startCamera()}
                       disabled={isStartingCamera}
-                      className="inline-flex items-center gap-2 bg-[#3345E8] hover:bg-[#2735C4] disabled:opacity-50 text-white text-xs font-bold py-2.5 px-4 rounded-[8px] transition-colors focus:outline-none shadow-sm min-h-[40px]"
+                      className="inline-flex items-center gap-2 bg-[#3345E8] hover:bg-[#2735C4] disabled:opacity-50 text-white text-xs font-bold py-2.5 px-4 rounded-[8px] transition-colors focus:outline-none shadow-sm min-h-[40px] cursor-pointer"
                     >
                       {isStartingCamera ? (
                         <>
@@ -830,9 +1051,9 @@ export function CheckInView({
                   </div>
                 )}
 
-                {/* Viewfinder Target Overlays */}
+                {/* Viewfinder Target Overlays (Requirement 6: Overlay on top of live video) */}
                 {isCameraActive && (
-                  <div className="pointer-events-none absolute inset-0 p-8 flex items-center justify-center">
+                  <div className="pointer-events-none absolute inset-0 z-10 p-8 flex items-center justify-center">
                     <div className="relative w-48 h-48 sm:w-56 sm:h-56">
                       <div className="absolute top-0 left-0 w-7 h-7 border-t-4 border-l-4 border-[#3345E8] rounded-tl-sm" />
                       <div className="absolute top-0 right-0 w-7 h-7 border-t-4 border-r-4 border-[#3345E8] rounded-tr-sm" />
@@ -858,7 +1079,7 @@ export function CheckInView({
                   <button
                     type="button"
                     onClick={stopCamera}
-                    className="flex-1 inline-flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold py-2.5 px-4 rounded-[8px] transition-colors focus:outline-none min-h-[40px]"
+                    className="flex-1 inline-flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold py-2.5 px-4 rounded-[8px] transition-colors focus:outline-none min-h-[40px] cursor-pointer"
                   >
                     <CameraOff className="w-3.5 h-3.5" />
                     <span>Stop Camera</span>
@@ -867,7 +1088,7 @@ export function CheckInView({
                   <button
                     type="button"
                     onClick={() => handleSelectMode('upload')}
-                    className="inline-flex items-center gap-1.5 bg-[#3345E8] hover:bg-[#2735C4] text-white text-xs font-semibold py-2.5 px-3 rounded-[8px] transition-colors min-h-[40px]"
+                    className="inline-flex items-center gap-1.5 bg-[#3345E8] hover:bg-[#2735C4] text-white text-xs font-semibold py-2.5 px-3 rounded-[8px] transition-colors min-h-[40px] cursor-pointer"
                   >
                     <FileUp className="w-3.5 h-3.5" />
                     <span>Upload Image</span>
