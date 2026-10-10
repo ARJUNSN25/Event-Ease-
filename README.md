@@ -73,7 +73,7 @@ Use the local URL printed in the terminal to open the website.
 
 ## 🌐 Live Demo
 
-Add your deployed website URL here.
+https://event-ease-five-sigma.vercel.app/?tab=home
 
 ## 🎯 Project Objective
 
