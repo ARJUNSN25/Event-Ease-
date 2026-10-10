@@ -307,34 +307,30 @@ export function resolveBannerUrl(url?: string | null, category?: EventCategory):
   return clean;
 }
 
-export const AUTHORIZED_ORGANIZER_EMAIL = 'arjun.s.n.140017@marwadiuniversity.ac.in';
+export const AUTHORIZED_ORGANIZER_EMAIL = 'arjunsn258@gmail.com';
 export const AUTHORIZED_ORGANIZER_EMAILS = [
-  'arjun.s.n.140017@marwadiuniversity.ac.in',
   'arjunsn258@gmail.com',
 ];
 export const AUTHORIZED_ORGANIZER_PASSWORD = '143211';
 
 /**
- * Checks if the provided email matches an authorized organizer email or college account
+ * Checks if the provided email matches the designated organizer email: arjunsn258@gmail.com
  */
 export function isAuthorizedOrganizerEmail(email?: string | null): boolean {
   if (!email) return false;
   const norm = email.trim().toLowerCase();
-  if (!norm.includes('@') || norm.length < 5) return false;
-  // Accepts recognized emails, university emails, or any valid organizer address
-  return true;
+  return norm === AUTHORIZED_ORGANIZER_EMAIL.toLowerCase();
 }
 
 /**
- * Verifies email and password for organizer access
+ * Verifies email and password for organizer access:
+ * Email must be arjunsn258@gmail.com and password must be 143211
  */
 export function verifyOrganizerCredentials(email?: string | null, password?: string | null): boolean {
   if (!email || !password) return false;
   const normEmail = email.trim().toLowerCase();
   const normPass = password.trim();
-  if (!normEmail.includes('@')) return false;
-  // Accepts security password '143211' or any valid organizer passcode (min 4 characters)
-  return normPass === AUTHORIZED_ORGANIZER_PASSWORD || normPass.length >= 4;
+  return normEmail === AUTHORIZED_ORGANIZER_EMAIL.toLowerCase() && normPass === AUTHORIZED_ORGANIZER_PASSWORD;
 }
 
 export function getOrganizerSession(): string | null {
@@ -356,13 +352,13 @@ export function setOrganizerSession(email: string, password?: string): void {
   const trimmed = email.trim().toLowerCase();
   if (!isAuthorizedOrganizerEmail(trimmed)) {
     throw new Error(
-      `Access denied: '${trimmed}' is not a valid email address.`
+      `Access denied: Only '${AUTHORIZED_ORGANIZER_EMAIL}' is authorized to access the organizer portal.`
     );
   }
   if (password !== undefined) {
     const valid = verifyOrganizerCredentials(trimmed, password);
     if (!valid) {
-      throw new Error('Invalid organizer password.');
+      throw new Error('Invalid organizer credentials. Check email and security password.');
     }
   }
   try {
@@ -927,17 +923,10 @@ export async function register(input: {
     throw new Error('This event is full.');
   }
 
-  // Step c: email not already registered for this event (compare lowercase)
+  // Step c: only 1 person can join for that particular name and email id
   const normalizedEmail = (input.email || '').trim().toLowerCase();
-  const emailAlreadyRegistered = eventRegistrations.some(
-    (r) => r.email.toLowerCase() === normalizedEmail
-  );
-  if (emailAlreadyRegistered) {
-    throw new Error('This email is already registered for this event.');
-  }
-
-  // Step d: valid name and a valid email format
   const trimmedName = (input.name || '').trim();
+
   if (!trimmedName) {
     throw new Error('Please enter your full name.');
   }
@@ -947,7 +936,23 @@ export async function register(input: {
     throw new Error('Please enter a valid email address.');
   }
 
-  // Generate unique code & QR code
+  // Prevent multiple registrations for the same event by email
+  const emailAlreadyRegistered = eventRegistrations.some(
+    (r) => r.email.toLowerCase() === normalizedEmail
+  );
+  if (emailAlreadyRegistered) {
+    throw new Error('This email is already registered for this event. Each student can only register once.');
+  }
+
+  // Prevent multiple registrations for the same event by exact name
+  const nameAlreadyRegistered = eventRegistrations.some(
+    (r) => r.name.toLowerCase() === trimmedName.toLowerCase()
+  );
+  if (nameAlreadyRegistered) {
+    throw new Error(`A registration under the name "${trimmedName}" already exists for this event. Only 1 person per name can register.`);
+  }
+
+  // Step d: Generate unique code & QR code
   const code = generateUniqueCode(event.id, allRegistrations);
   const qrDataUrl = await QRCode.toDataURL(code, {
     width: 320,

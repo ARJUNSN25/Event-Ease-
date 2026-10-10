@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" className="w-full h-full">
+  <defs>
+    <linearGradient id="logoBlueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stopColor="#2563EB" />
+      <stop offset="60%" stopColor="#3B82F6" />
+      <stop offset="100%" stopColor="#06B6D4" />
+    </linearGradient>
+    <linearGradient id="logoCheckGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stopColor="#0284C7" />
+      <stop offset="100%" stopColor="#38BDF8" />
+    </linearGradient>
+  </defs>
+
+  <!-- Left Ring Top -->
+  <rect x="29" y="10" width="7" height="18" rx="3.5" fill="url(#logoBlueGrad)" />
+  <!-- Right Ring Top -->
+  <rect x="56" y="10" width="7" height="18" rx="3.5" fill="url(#logoBlueGrad)" />
+
+  <!-- Calendar Body Outline & Curved Loop -->
+  <path
+    d="M 38 20 L 54 20 M 65 20 L 71 20 C 76 20 80 24 80 30 L 80 50 M 27 20 L 21 20 C 16 20 12 24 12 30 L 12 68 C 12 79 21 88 33 89 C 24 88 17 80 18 69"
+    stroke="url(#logoBlueGrad)"
+    strokeWidth="7"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  />
+
+  <!-- The stylized 'e' letterform center loop -->
+  <path
+    d="M 23 72 C 16 57 26 39 46 39 C 64 39 74 53 71 69 L 23 69 C 24 81 35 87 48 85 C 57 84 64 78 67 71"
+    stroke="url(#logoBlueGrad)"
+    strokeWidth="7.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  />
+
+  <!-- Top Inner Loop of 'e' -->
+  <path
+    d="M 27 59 C 28 49 37 45 47 45 C 57 45 64 50 63 59 Z"
+    fill="url(#logoBlueGrad)"
+    fillOpacity="0.15"
+  />
+
+  <!-- Prominent Checkmark Badge on right -->
+  <path
+    d="M 64 67 L 72 75 L 91 50"
+    stroke="url(#logoCheckGrad)"
+    strokeWidth="8"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  />
+</svg>

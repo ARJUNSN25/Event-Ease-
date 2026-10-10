@@ -33,8 +33,8 @@ interface OrganizerAuthProps {
 
 export function OrganizerAuth({ onLoginSuccess, onNavigateToRegister }: OrganizerAuthProps) {
   const { showToast } = useToast();
-  const [email, setEmail] = useState('arjun.s.n.140017@marwadiuniversity.ac.in');
-  const [password, setPassword] = useState(AUTHORIZED_ORGANIZER_PASSWORD);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -56,10 +56,15 @@ export function OrganizerAuth({ onLoginSuccess, onNavigateToRegister }: Organize
       return;
     }
 
-    // Check credentials (email + password)
+    // Check credentials: Only arjunsn258@gmail.com with password 143211
+    if (trimmedEmail !== AUTHORIZED_ORGANIZER_EMAIL.toLowerCase()) {
+      setError('Access denied: Invalid organizer email or credentials.');
+      return;
+    }
+
     const isValid = verifyOrganizerCredentials(trimmedEmail, cleanPassword);
     if (!isValid) {
-      setError('Incorrect password. Please enter the organizer password (default: 143211).');
+      setError('Incorrect password. Please enter the valid organizer security password.');
       return;
     }
 
@@ -74,18 +79,6 @@ export function OrganizerAuth({ onLoginSuccess, onNavigateToRegister }: Organize
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const handleFillUniversity = () => {
-    setEmail('arjun.s.n.140017@marwadiuniversity.ac.in');
-    setPassword(AUTHORIZED_ORGANIZER_PASSWORD);
-    setError(null);
-  };
-
-  const handleFillPersonal = () => {
-    setEmail('arjunsn258@gmail.com');
-    setPassword(AUTHORIZED_ORGANIZER_PASSWORD);
-    setError(null);
   };
 
   return (
@@ -149,7 +142,7 @@ export function OrganizerAuth({ onLoginSuccess, onNavigateToRegister }: Organize
                 htmlFor="organizer-password"
                 className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5"
               >
-                Security Password (Default: 143211)
+                Security Password
               </label>
               <div className="relative">
                 <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -184,30 +177,6 @@ export function OrganizerAuth({ onLoginSuccess, onNavigateToRegister }: Organize
                   <span>{error}</span>
                 </p>
               )}
-            </div>
-
-            {/* Quick Credentials Assistant */}
-            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
-              <div className="flex items-center justify-between text-slate-500 font-medium">
-                <span>Quick Sign-In presets:</span>
-                <span className="font-mono text-slate-700 font-bold">Pass: 143211</span>
-              </div>
-              <div className="flex flex-wrap gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={handleFillUniversity}
-                  className="px-2.5 py-1.5 bg-white hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 text-indigo-700 rounded-lg font-semibold transition-colors cursor-pointer text-[11px]"
-                >
-                  🎓 University Account
-                </button>
-                <button
-                  type="button"
-                  onClick={handleFillPersonal}
-                  className="px-2.5 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-lg font-semibold transition-colors cursor-pointer text-[11px]"
-                >
-                  ✉️ arjunsn258@gmail.com
-                </button>
-              </div>
             </div>
 
             {/* Sign In Button */}

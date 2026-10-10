@@ -4,6 +4,7 @@
  */
 
 import React, { useState } from 'react';
+import { Logo } from './Logo';
 import {
   Compass,
   Ticket,
@@ -61,11 +62,11 @@ export function Navbar({
         <div className="max-w-[1180px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           {/* Zone 1: Modern EventEase Logo */}
           <div
-            className="flex items-center gap-3 cursor-pointer select-none"
+            className="flex items-center gap-3 cursor-pointer select-none group"
             onClick={() => onTabChange('home')}
           >
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-blue-600 flex items-center justify-center font-extrabold text-white text-lg tracking-tight shadow-sm shadow-indigo-500/20">
-              E
+            <div className="w-9 h-9 rounded-xl bg-white border border-slate-100 p-1 flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
+              <Logo className="w-full h-full" />
             </div>
             <div className="flex flex-col">
               <div className="flex items-center gap-1.5">

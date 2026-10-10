@@ -564,6 +564,15 @@ export function OrganizerView({
             <ShieldCheck className="w-4 h-4 text-indigo-600" />
             <span>Organizer: {organizerEmail || 'Event Admin'}</span>
           </div>
+
+          <div
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/80 text-xs font-bold w-fit"
+            title="Database Connected: ooxhjbafurogcnqurdvo"
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <Database className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Supabase Cloud Connected</span>
+          </div>
         </div>
 
         {/* Action Buttons Row */}

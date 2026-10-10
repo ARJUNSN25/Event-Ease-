@@ -392,7 +392,7 @@ export function CheckInView({
 
       isScanningFrameRef.current = true;
       try {
-        // Native BarcodeDetector (instant GPU acceleration in modern Chrome/Edge)
+        // Native BarcodeDetector (instant GPU acceleration in modern Chrome/Edge/Android)
         if (typeof window !== 'undefined' && 'BarcodeDetector' in window) {
           try {
             if (!barcodeDetectorRef.current) {
@@ -405,17 +405,17 @@ export function CheckInView({
               return;
             }
           } catch {
-            // Ignore single frame detect error
+            // Ignore frame detect error and fall through
           }
         }
 
-        // Fallback: draw frame onto offscreen canvas and decode via image decoder
+        // Fast canvas frame capture & decode
         if (video.videoWidth > 0 && video.videoHeight > 0) {
           if (!scanCanvasRef.current) {
             scanCanvasRef.current = document.createElement('canvas');
           }
           const canvas = scanCanvasRef.current;
-          const targetWidth = Math.min(video.videoWidth, 480);
+          const targetWidth = Math.min(video.videoWidth, 640);
           const targetHeight = Math.min(video.videoHeight, 480);
           if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
             canvas.width = targetWidth;
@@ -439,7 +439,7 @@ export function CheckInView({
                 }
               },
               'image/jpeg',
-              0.8
+              0.85
             );
           }
         }
@@ -448,10 +448,10 @@ export function CheckInView({
       } finally {
         isScanningFrameRef.current = false;
       }
-    }, 250);
+    }, 200);
   }, [handleScanSuccess]);
 
-  // Stop Camera & release all media tracks (Requirement 5)
+  // Stop Camera & release all media tracks
   const stopCamera = useCallback(() => {
     if (scanIntervalRef.current) {
       window.clearInterval(scanIntervalRef.current);
@@ -471,6 +471,11 @@ export function CheckInView({
     }
 
     if (videoRef.current) {
+      try {
+        videoRef.current.pause();
+      } catch {
+        // Ignore
+      }
       videoRef.current.srcObject = null;
     }
 
@@ -479,9 +484,8 @@ export function CheckInView({
     isStartingLockRef.current = false;
   }, []);
 
-  // Start Camera (Requirements 1, 2, 3, 4, 8, 9)
+  // Start Camera with resilient constraint fallbacks & clean video attachment
   const startCamera = async (targetDeviceId?: string) => {
-    // Requirement 9: Prevent multiple camera streams from opening simultaneously
     if (isStartingLockRef.current || isStartingCamera) {
       return;
     }
@@ -505,7 +509,7 @@ export function CheckInView({
       scanIntervalRef.current = null;
     }
 
-    // Requirement 8: Check for insecure connection and browser support
+    // Check mediaDevices support
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       const isInsecure =
         typeof window !== 'undefined' &&
@@ -515,7 +519,7 @@ export function CheckInView({
 
       const errorMsg = isInsecure
         ? 'Insecure connection: Camera access is blocked by browsers over HTTP. Please use HTTPS or localhost.'
-        : 'Camera not supported: The MediaDevices API is not available in this browser. Please use a modern browser or "Upload Pass Image".';
+        : 'Camera not supported: The MediaDevices API is not available in this browser. Please use "Upload Pass Image".';
       setCameraError(errorMsg);
       setIsStartingCamera(false);
       isStartingLockRef.current = false;
@@ -523,45 +527,100 @@ export function CheckInView({
     }
 
     try {
-      // Requirement 1: Use navigator.mediaDevices.getUserMedia() to access the laptop webcam.
-      // Use video: true as default instead of forcing facingMode: "environment".
-      const constraints: MediaStreamConstraints = {
-        video: targetDeviceId ? { deviceId: { exact: targetDeviceId } } : true,
-        audio: false,
-      };
+      let stream: MediaStream | null = null;
 
-      let stream: MediaStream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia(constraints);
-      } catch (subErr: any) {
-        // If exact targetDeviceId failed or was overconstrained, fallback to video: true
-        if (targetDeviceId && (subErr.name === 'OverconstrainedError' || subErr.name === 'ConstraintNotSatisfiedError')) {
-          console.warn('Target camera overconstrained, falling back to video: true');
-          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-        } else {
-          throw subErr;
+      // Tiered constraint strategy:
+      // 1. If explicit targetDeviceId specified, try that first
+      // 2. Otherwise try ideal webcam resolution { ideal: 1280 }, { ideal: 720 }
+      // 3. Fallback to basic { video: true }
+      // 4. Fallback to facingMode: 'user'
+      const constraintCandidates: MediaStreamConstraints[] = [];
+
+      if (targetDeviceId) {
+        constraintCandidates.push({
+          video: { deviceId: { exact: targetDeviceId } },
+          audio: false,
+        });
+      }
+
+      constraintCandidates.push(
+        {
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: false,
+        },
+        {
+          video: true,
+          audio: false,
+        },
+        {
+          video: {
+            facingMode: 'user',
+          },
+          audio: false,
         }
+      );
+
+      let lastError: any = null;
+      for (const candidate of constraintCandidates) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(candidate);
+          if (stream) break;
+        } catch (candErr: any) {
+          lastError = candErr;
+          // If permission explicitly denied, stop retrying immediately
+          if (candErr.name === 'NotAllowedError' || candErr.name === 'PermissionDeniedError') {
+            throw candErr;
+          }
+        }
+      }
+
+      if (!stream) {
+        throw lastError || new Error('Unable to open camera stream.');
       }
 
       mediaStreamRef.current = stream;
 
-      // Requirement 2: Attach the returned stream using videoRef.current.srcObject = stream
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        // Requirement 3: Ensure video element has autoPlay, playsInline, and muted enabled
-        videoRef.current.muted = true;
-        videoRef.current.playsInline = true;
-        videoRef.current.autoplay = true;
+      // Update state so video element is rendered and visible in DOM
+      setIsCameraActive(true);
 
-        // Requirement 4: Call video.play() after attaching stream and handle playback errors
-        try {
-          await videoRef.current.play();
-        } catch (playErr) {
-          console.warn('Video play error (handled):', playErr);
+      // Attach stream to video element
+      const attachVideo = async () => {
+        const vid = videoRef.current;
+        if (!vid) return;
+
+        vid.muted = true;
+        vid.playsInline = true;
+        vid.autoplay = true;
+        vid.setAttribute('playsinline', 'true');
+        vid.setAttribute('webkit-playsinline', 'true');
+
+        if (vid.srcObject !== stream) {
+          vid.srcObject = stream;
         }
-      }
 
-      // Query available video devices for Flip Camera support
+        try {
+          await vid.play();
+        } catch (playErr) {
+          console.warn('Video play triggered:', playErr);
+          // Retry on loadedmetadata if initial play wasn't ready
+          vid.onloadedmetadata = async () => {
+            try {
+              await vid.play();
+            } catch (e) {
+              console.warn('Playback onloadedmetadata:', e);
+            }
+          };
+        }
+      };
+
+      // Ensure DOM has rendered the video element
+      await new Promise((r) => setTimeout(r, 60));
+      await attachVideo();
+
+      // Query available video devices for Camera switcher
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoInputs = devices.filter((d) => d.kind === 'videoinput');
@@ -586,31 +645,35 @@ export function CheckInView({
         // Ignore device enumeration issues
       }
 
-      setIsCameraActive(true);
       showToast('Camera started successfully.');
 
       // Start continuous scanning loop for QR passes
       startScanLoop();
     } catch (err: any) {
       console.warn('Camera access failed:', err);
-      // Requirement 8: Clear, user-friendly error messages
       let message = 'Could not access camera. Please check permissions or use "Upload Pass Image".';
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        message = 'Camera permission denied: Please allow camera access in your browser site permissions and click Start Camera again.';
+        message = 'Camera permission denied: Please click the camera icon in your browser address bar to allow camera access, then click Start Camera again.';
       } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-        message = 'No camera found: No video input device was detected on this laptop. Please connect a webcam or use "Upload Pass Image".';
+        message = 'No camera found: No webcam was detected on this device. Please connect a camera or use "Upload Pass Image".';
       } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
-        message = 'Camera already in use: Another application (Zoom, Teams, etc.) or browser tab is using your webcam. Please close it and retry.';
+        message = 'Camera already in use: Another app (Zoom, Google Meet, etc.) or another tab is using your webcam. Please close it and retry.';
       } else if (err.name === 'OverconstrainedError') {
-        message = 'Camera resolution or constraint not supported by your device.';
+        message = 'Camera constraint not supported by your device webcam.';
       } else if (err.name === 'SecurityError') {
-        message = 'Insecure connection: Camera access blocked due to security settings.';
+        message = 'Insecure connection: Camera access is blocked. Please access via HTTPS or localhost.';
       }
 
       setCameraError(message);
       setIsCameraActive(false);
       if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+        mediaStreamRef.current.getTracks().forEach((t) => {
+          try {
+            t.stop();
+          } catch {
+            // Ignore
+          }
+        });
         mediaStreamRef.current = null;
       }
     } finally {
